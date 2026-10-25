@@ -307,9 +307,61 @@ NEWS_SEARCH_QUERY = ('(Saprissa OR Alajuelense OR Herediano OR Cartaginés OR Sp
     'OR site:diarioextra.com OR site:lateja.cr OR site:greciadeportes.com) when:7d')
 NEWS_CACHE={'items':[], 'fetched':0, 'updated':None, 'sources':{}}
 NEWS_LOCK=threading.Lock()
+
+# Titulares de equipos y contexto futbolístico: no confundir una ciudad
+# (Puntarenas, San Carlos, Pérez Zeledón) con el club local.
 TEAM_NEWS=re.compile(r'\b(?:saprissa|alajuelense|herediano|cartagin[eé]s|sporting|puntarenas|'
     r'san carlos|p[eé]rez zeled[oó]n|escorpiones|inter san carlos|primera divisi[oó]n|'
     r'l[ií]ga promerica|liga deportiva|torneo apertura|torneo clausura|unafut)\b',re.I)
+# Clubes cuya mención suele indicar fútbol: pedir además términos
+# futbolísticos para descartar homónimos o noticias ajenas al deporte.
+CLUB_EXPLICIT=re.compile(r'\b(?:saprissa|alajuelense|herediano|cartagin[eé]s|'
+    r'sporting\s+(?:fc|f\.?c\.?)|inter\s+san\s+carlos|'
+    r'escorpiones\s+(?:fc|f\.?c\.?)|'
+    r'puntarenas\s+(?:fc|f\.?c\.?)|'
+    r'(?:ad|a\.?d\.?)\s+san\s+carlos|'
+    r'(?:municipal|ad|a\.?d\.?)\s+p[eé]rez\s+zeled[oó]n|'
+    r'l[ií]ga\s+promerica|unafut|torneo\s+(?:apertura|clausura)|'
+    r'primera\s+divisi[oó]n)\b',re.I)
+AMBIGUOUS_TEAM=re.compile(r'\b(?:puntarenas|san\s+carlos|p[eé]rez\s+zeled[oó]n|'
+    r'escorpiones|sporting)\b',re.I)
+FOOTBALL_CONTEXT=re.compile(r'\b(?:f[uú]tbol|futbol[ií]st[ao]s?|futbolero|'
+    r'partidos?|marcador(?:es)?|goles?|golazo|golpazo|goleada|'
+    r'victoria|derrota|empate|remontada|cl[aá]sico|'
+    r't[eé]cnico|entrenador|director\s+t[eé]cnico|dt|'
+    r'jornada|torneo|campeonato|liga|primera\s+divisi[oó]n|'
+    r'cancha|gramilla|estadios?|jugadores?|delantero|'
+    r'portero|guardameta|defensa|mediocampo|'
+    r'penal(?:ti)?|[áa]rbitro|expulsado|'
+    r'tabla\s+de\s+posiciones|copa\s+centroamericana|'
+    r'liguilla|semifinal|final|clasificaci[oó]n|'
+    r'vs\.?|contra|derbi|ascenso|descenso)\b',re.I)
+# Bloqueo para sucesos y noticias generales en titulares que contienen
+# por casualidad el nombre de una ciudad con club de primera división.
+GENERAL_NEWS=re.compile(r'\b(?:motociclista|balazos?|asesinad[oa]s?|'
+    r'homicidios?|homicida|sicarios?|femicidios?|polic[ií]a|'
+    r'crimen|cr[ií]menes|delincuen(?:te|cia)|detenid[oa]s?|'
+    r'ataque\s+armado|atacad[oa]\s+a\s+balazos|'
+    r'accidente\s+de\s+tr[aá]nsito|colisi[oó]n|'
+    r'decomis[oa]|allanamiento|narcotr[aá]fico|'
+    r'diputad[oa]s?|asamblea\s+legislativa|'
+    r'terremoto|temblor|inundaci[oó]n)\b',re.I)
+
+def is_football_news(title, url=''):
+    """Titulares de Primera División; evita confundir ciudades con clubes.
+
+    Exige mención futbolística o de un club inequívoco y bloquea sucesos
+    ajenos al deporte. No infiere relevancia a partir del dominio del medio.
+    """
+    title=' '.join(str(title or '').split())
+    if len(title)<16 or GENERAL_NEWS.search(title):
+        return False
+    if not TEAM_NEWS.search(title):
+        return False
+    if CLUB_EXPLICIT.search(title):
+        return True
+    return bool(FOOTBALL_CONTEXT.search(title))
+
 ALLOWED_DOMAINS=tuple(x[3] for x in NEWS_SOURCES)
 
 def trusted_url(url, expected=None):
@@ -349,7 +401,7 @@ def parse_rss(name,url,domain):
         if not link:
             tag=e.find('{http://www.w3.org/2005/Atom}link')
             if tag is not None:link=tag.attrib.get('href','')
-        if not title or not trusted_url(link,domain) or not TEAM_NEWS.search(title):continue
+        if not title or not trusted_url(link,domain) or not is_football_news(title,link):continue
         stamp=e.findtext('pubDate') or e.findtext('{http://www.w3.org/2005/Atom}updated') or ''
         pic=None
         for tag in e.iter():
@@ -374,7 +426,7 @@ def parse_listing(name,url,domain):
         head=a.find(['h2','h3','h4'])
         title=(head.get_text(' ',strip=True) if head else a.get('aria-label') or a.get_text(' ',strip=True))
         title=re.sub(r'\s+',' ',title).strip()
-        if not (20<=len(title)<=230) or not TEAM_NEWS.search(title):continue
+        if not (20<=len(title)<=230) or not is_football_news(title,link):continue
         seen.add(link)
         img=a.find('img')
         if img is None:
@@ -422,7 +474,7 @@ def google_headlines():
     for e in root.findall('./channel/item'):
         title=(e.findtext('title') or '').strip();link=(e.findtext('link') or '').strip();src=e.find('source')
         publisher=(src.text or '').strip() if src is not None else 'Noticias'
-        if not title or not link.startswith('https://news.google.com/') or not TEAM_NEWS.search(title):continue
+        if not title or not link.startswith('https://news.google.com/') or not is_football_news(title,link):continue
         if not any(x in publisher.lower() for x in ('crhoy','nación','nacion','teletica','extra','deportescr','grecia','la teja')):continue
         out.append(dict(title=title,source=publisher,url=link,published=local_date(e.findtext('pubDate') or ''),image=None,raw_date=''))
         if len(out)>=8:break
@@ -430,7 +482,8 @@ def google_headlines():
 
 def headlines():
     with NEWS_LOCK:
-        if time.monotonic()-NEWS_CACHE['fetched']<1200:return NEWS_CACHE['items']
+        if time.monotonic()-NEWS_CACHE['fetched']<1200:
+            return [item for item in NEWS_CACHE['items'] if is_football_news(item.get('title',''),item.get('url',''))][:6]
         NEWS_CACHE['fetched']=time.monotonic();previous=NEWS_CACHE['items'];found=[];diag={}
         with ThreadPoolExecutor(max_workers=7) as pool:
             jobs=[pool.submit(source_news,s) for s in NEWS_SOURCES]
@@ -441,7 +494,9 @@ def headlines():
                 except Exception:pass
         # favor original media articles; enrich images from og:image
         unique={}
-        for item in found:unique.setdefault(item['url'].split('?')[0],item)
+        for item in found:
+            if is_football_news(item.get('title',''),item.get('url','')):
+                unique.setdefault(item['url'].split('?')[0],item)
         items=list(unique.values())[:21]
         with ThreadPoolExecutor(max_workers=7) as pool:
             enriched=list(pool.map(article_image,items))
@@ -449,11 +504,11 @@ def headlines():
         if len(enriched)<6:
             try:
                 for item in google_headlines():
-                    if item['url'] not in unique:enriched.append(item)
+                    if item['url'] not in unique and is_football_news(item.get('title',''),item.get('url','')):enriched.append(item)
             except Exception:pass
-        result=enriched[:12]
+        result=[item for item in enriched if is_football_news(item.get('title',''),item.get('url',''))][:6]
         if result:NEWS_CACHE['items']=result
-        else:NEWS_CACHE['items']=previous
+        else:NEWS_CACHE['items']=[item for item in previous if is_football_news(item.get('title',''),item.get('url',''))][:6]
         NEWS_CACHE['sources']=diag
         NEWS_CACHE['updated']=datetime.now(TZ).isoformat()
         return NEWS_CACHE['items']
