@@ -555,6 +555,12 @@ class Handler(BaseHTTPRequestHandler):
         elif re.fullmatch(r'/logos/(DS|CSC|SSJ|LDA|SC|PFC|ISC|CSH|EB|PZ)\.png',self.path):
             image_path=ROOT/self.path.lstrip('/')
             self.respond(image_path.read_bytes(),'image/png')
+        elif re.fullmatch(r'/tg-flag-(ni|hn|sv|cr|pa)\.png', self.path):
+            flag_file=ROOT/self.path.lstrip('/')
+            if flag_file.is_file():
+                self.respond(flag_file.read_bytes(),'image/png')
+            else:
+                self.respond(b'Bandera no encontrada','text/plain',404)
         elif self.path in ('/favicon.ico','/favicon.svg','/favicon-32x32.png','/favicon-16x16.png','/apple-touch-icon.png','/android-chrome-192x192.png','/android-chrome-512x512.png','/site.webmanifest'):
             static_map={
                 '/favicon.ico':('favicon.ico','image/x-icon'),
