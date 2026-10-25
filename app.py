@@ -524,6 +524,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/health':
             self.respond(b'{"status":"ok"}')
+        elif self.path.startswith('/api/tg-results'):
+            try:
+                dataset=json.loads((ROOT/'tg_resultados.json').read_text(encoding='utf-8'))
+                if not isinstance(dataset,dict) or not isinstance(dataset.get('sorteos'),list):
+                    raise ValueError('Datos de TG invalidos')
+                self.respond(json.dumps({'fecha':dataset.get('fecha'),'sorteos':dataset['sorteos']},ensure_ascii=False).encode('utf-8'))
+            except (OSError,ValueError,TypeError):
+                self.respond(b'{"fecha":null,"sorteos":[]}', 'application/json; charset=utf-8')
+        elif self.path in ('/tg-panel-base.webp','/tg-logo-original.webp'):
+            asset=ROOT/self.path.lstrip('/')
+            if asset.is_file():
+                self.respond(asset.read_bytes(),'image/webp')
+            else:
+                self.respond(b'Archivo TG no encontrado','text/plain',404)
         elif self.path == '/api/news':
             self.respond(json.dumps({'items':headlines(), 'updated':NEWS_CACHE['updated']},ensure_ascii=False).encode('utf8'))
         elif self.path.startswith('/api/news-status'):
