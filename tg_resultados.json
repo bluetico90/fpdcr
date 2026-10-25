@@ -2,24 +2,24 @@
   "fecha": "2026-10-25",
   "sorteos": [
     {
-      "pais": "Nicaragua",
-      "hora": "11:00",
-      "numero": "87"
+      "pais": "Panamá",
+      "hora": "14:00",
+      "numero": "91"
     },
     {
       "pais": "Honduras",
-      "hora": "11:00",
-      "numero": "25"
+      "hora": "15:00",
+      "numero": "87"
     },
     {
-      "pais": "El Salvador",
-      "hora": "11:00",
-      "numero": "47"
+      "pais": "Nica",
+      "hora": "15:00",
+      "numero": "23"
     },
     {
       "pais": "Tica",
-      "hora": "13:00",
-      "numero": "99"
+      "hora": "16:30",
+      "numero": "63"
     }
   ]
 }
