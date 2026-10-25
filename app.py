@@ -478,7 +478,11 @@ class Handler(BaseHTTPRequestHandler):
             data=state(force='force=1' in self.path)
             self.respond(json.dumps(data,ensure_ascii=False).encode('utf8'))
         elif self.path in ('/ads/tiempos-golfito.png', '/ads/cabinas-golfito.png', '/ads/tiempos-golfito-mobile.png', '/ads/cabinas-golfito-mobile.png'):
-            self.respond((ROOT/self.path.lstrip('/')).read_bytes(),'image/png')
+            image_path=ROOT/self.path.lstrip('/')
+            if image_path.is_file():
+                self.respond(image_path.read_bytes(),'image/png')
+            else:
+                self.respond(b'Imagen no encontrada','text/plain',404)
         elif re.fullmatch(r'/logos/(DS|CSC|SSJ|LDA|SC|PFC|ISC|CSH|EB|PZ)\.png',self.path):
             image_path=ROOT/self.path.lstrip('/')
             self.respond(image_path.read_bytes(),'image/png')
