@@ -290,36 +290,147 @@ def state(force=False):
                 cache['error']=str(exc)[:200]
         return copy.deepcopy(cache)
 
-NEWS_CACHE={'items':[], 'fetched':0}
+# Fuentes editoriales externas. Solo titulares, metadatos y enlaces; sin copiar artículos.
+# Algunos sitios pueden bloquear RSS, imágenes o lecturas automáticas: se omiten sin inventar.
+NEWS_SOURCES = [
+    ('CRHoy', 'https://crhoy.com/feed/', 'crhoy.com'),
+    ('Diario Extra', 'https://www.diarioextra.com/feed/', 'diarioextra.com'),
+    ('DeportesCR', 'https://deportescr.net/feed/', 'deportescr.net'),
+    ('Grecia Deportes', 'https://greciadeportes.com/feed/', 'greciadeportes.com'),
+    ('Teletica', 'https://www.teletica.com/rss/deportes.xml', 'teletica.com'),
+    ('La Nación', 'https://www.nacion.com/arc/outboundfeeds/rss/category/puro-deporte/', 'nacion.com'),
+    ('La Teja', 'https://www.lateja.cr/arc/outboundfeeds/rss/category/deportes/', 'lateja.cr'),
+]
+# Enlaces de búsqueda secundaria: se usan para titulares, no se inventan fotos ni URLs originales.
+NEWS_SEARCH_QUERY = ('(Saprissa OR Alajuelense OR Herediano OR Cartaginés OR Sporting FC '
+    'OR Puntarenas FC OR San Carlos OR Pérez Zeledón OR Escorpiones OR Inter San Carlos '
+    'OR Liga Promerica) (site:crhoy.com OR site:nacion.com OR site:teletica.com '
+    'OR site:deportescr.net OR site:diarioextra.com OR site:lateja.cr '
+    'OR site:greciadeportes.com OR site:espn.co.cr) when:7d')
+NEWS_CACHE={'items':[], 'fetched':0, 'updated':None}
 NEWS_LOCK=threading.Lock()
+TEAM_NEWS=re.compile(r'\b(?:saprissa|alajuelense|herediano|cartagin[eé]s|sporting|puntarenas|'
+    r'san carlos|p[eé]rez zeled[oó]n|escorpiones|inter san carlos|primera divisi[oó]n|'
+    r'l[ií]ga promerica|liga deportiva|torneo apertura|torneo clausura|unafut)\b',re.I)
+ALLOWED_DOMAINS=tuple(src[2] for src in NEWS_SOURCES)+('espn.co.cr','espn.com')
+
+def trusted_url(url):
+    try:
+        parsed=urlparse((url or '').strip())
+        domain=(parsed.hostname or '').lower()
+        return parsed.scheme=='https' and any(domain==d or domain.endswith('.'+d) for d in ALLOWED_DOMAINS)
+    except Exception: return False
+
+def safe_picture(url, article_url):
+    if not url:return None
+    url=urljoin(article_url,url.strip())
+    parts=urlparse(url)
+    if parts.scheme!='https' or not parts.hostname or parts.username or parts.password:return None
+    if parts.hostname.lower() in ('localhost','127.0.0.1','0.0.0.0'):return None
+    return url
+
+def local_date(value):
+    try:
+        return parsedate_to_datetime(value).astimezone(TZ).strftime('%d/%m/%Y')
+    except Exception:
+        try:return datetime.fromisoformat(value.replace('Z','+00:00')).astimezone(TZ).strftime('%d/%m/%Y')
+        except Exception:return ''
+
+def parse_rss(name, url, domain):
+    """Retrieve allowed RSS/Atom XML; extract official media thumbnails when published."""
+    data=get_news_html(url)
+    root=ET.fromstring(data)
+    entries=[]
+    for el in list(root.findall('./channel/item'))+list(root.findall('{http://www.w3.org/2005/Atom}entry')):
+        title=(el.findtext('title') or el.findtext('{http://www.w3.org/2005/Atom}title') or '').strip()
+        link=(el.findtext('link') or '').strip()
+        if not link:
+            linktag=el.find('{http://www.w3.org/2005/Atom}link')
+            if linktag is not None:link=linktag.attrib.get('href','')
+        if not title or not trusted_url(link) or not TEAM_NEWS.search(title):continue
+        published=el.findtext('pubDate') or el.findtext('{http://www.w3.org/2005/Atom}updated') or ''
+        image=None
+        for tag in el.iter():
+            typ=tag.tag.rsplit('}',1)[-1].lower()
+            if typ in ('thumbnail','content') and 'url' in tag.attrib and ('media' in tag.tag.lower() or typ=='thumbnail'):
+                image=safe_picture(tag.attrib['url'],link)
+            elif typ=='enclosure' and tag.attrib.get('type','').startswith('image/'):
+                image=safe_picture(tag.attrib.get('url'),link)
+            if image:break
+        entries.append({'title':title,'source':name,'url':link,'published':local_date(published),
+                        'raw_date':published,'image':image})
+        if len(entries)>=12:break
+    return entries
+
+def get_news_html(url):
+    req=Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; UnafutLiveNews/1.0)',
+             'Accept':'application/rss+xml,application/xml,text/html;q=0.8','Accept-Language':'es-CR,es;q=0.9'})
+    with urlopen(req,timeout=7) as resp:
+        if resp.status!=200:raise ValueError('HTTP '+str(resp.status))
+        return resp.read(2_000_000).decode('utf-8','replace')
+
+def article_image(news):
+    if news['image'] or not trusted_url(news['url']):return news
+    try:
+        soup=BeautifulSoup(get_news_html(news['url']),'html.parser')
+        for attr,val in [('property','og:image:secure_url'),('property','og:image'),('name','twitter:image')]:
+            tag=soup.find('meta',attrs={attr:val})
+            if tag and tag.get('content'):
+                news['image']=safe_picture(tag['content'],news['url'])
+                if news['image']:break
+    except Exception:pass
+    return news
+
+def google_headlines():
+    url='https://news.google.com/rss/search?q='+quote(NEWS_SEARCH_QUERY)+'&hl=es-419&gl=CR&ceid=CR:es-419'
+    root=ET.fromstring(get_news_html(url))
+    out=[]
+    for el in root.findall('./channel/item'):
+        title=(el.findtext('title') or '').strip()
+        link=(el.findtext('link') or '').strip()
+        src=el.find('source')
+        publisher=(src.text or '').strip() if src is not None else 'Noticias'
+        if not title or not link.startswith('https://') or not TEAM_NEWS.search(title):continue
+        if not any(x in publisher.lower() for x in ('crhoy','nación','nacion','teletica','extra','deportescr','grecia','la teja','espn')):continue
+        out.append(dict(title=title,source=publisher,url=link,published=local_date(el.findtext('pubDate') or ''),image=None))
+        if len(out)>=10:break
+    return out
+
 def headlines():
-    """Solo titulares/enlaces de Google News RSS, evitando republicar artículos completos."""
+    """Cache 20 min; use original thumbnails only where sources publish and permit retrieval."""
     with NEWS_LOCK:
-        if time.monotonic()-NEWS_CACHE['fetched'] < 900:return NEWS_CACHE['items']
+        if time.monotonic()-NEWS_CACHE['fetched']<1200:return NEWS_CACHE['items']
         NEWS_CACHE['fetched']=time.monotonic()
-        query='(Saprissa OR Alajuelense OR Herediano OR Cartaginés OR "primera división" Costa Rica) (site:crhoy.com OR site:nacion.com OR site:espn.com) when:7d'
-        url='https://news.google.com/rss/search?q='+quote(query)+'&hl=es-419&gl=CR&ceid=CR:es-419'
-        try:
-            xml=get_html(url)
-            root=ET.fromstring(xml)
-            results=[]
-            for el in root.findall('./channel/item'):
-                title=(el.findtext('title') or '').strip()
-                link=(el.findtext('link') or '').strip()
-                src=el.find('source')
-                publisher=(src.text or '').strip() if src is not None else 'Noticias'
-                pub=el.findtext('pubDate') or ''
-                if not title or not link.startswith('https://'):continue
-                if publisher.lower() not in ['crhoy.com','la nación','la nacion','espn','espn deportes','crhoy','nacion.com'] and not any(k in publisher.lower() for k in ['crhoy','nación','espn']):continue
-                try:
-                    d=parsedate_to_datetime(pub).astimezone(TZ).strftime('%d/%m/%Y')
-                except Exception:d=''
-                results.append(dict(title=title,source=publisher,url=link,published=d))
-                if len(results)==6:break
-            NEWS_CACHE['items']=results
-        except Exception:
-            # Nunca mostrar titulares ficticios si RSS está inaccesible.
-            pass
+        previous=NEWS_CACHE['items']
+        found=[]
+        with ThreadPoolExecutor(max_workers=7) as pool:
+            jobs=[pool.submit(parse_rss,*entry) for entry in NEWS_SOURCES]
+            for job in as_completed(jobs):
+                try:found.extend(job.result())
+                except Exception:pass
+        # Metadata fetch only for original trusted URLs, never third-party Google redirects.
+        candidates=sorted(found,key=lambda n:n.get('raw_date',''),reverse=True)[:18]
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            jobs=[pool.submit(article_image,item) for item in candidates]
+            enriched=[]
+            for job in as_completed(jobs):
+                try:enriched.append(job.result())
+                except Exception:pass
+        # Keep each publication once, omit duplicate story URLs.
+        unique={}
+        for item in enriched:
+            unique[item['url'].split('?')[0]]=item
+        result=list(unique.values())
+        if len(result)<6:
+            try:
+                for item in google_headlines():
+                    unique.setdefault(item['url'].split('?')[0],item)
+                result=list(unique.values())
+            except Exception:pass
+        result=result[:12]
+        if result:NEWS_CACHE['items']=result
+        else:NEWS_CACHE['items']=previous
+        NEWS_CACHE['updated']=datetime.now(TZ).isoformat()
         return NEWS_CACHE['items']
 
 class Handler(BaseHTTPRequestHandler):
