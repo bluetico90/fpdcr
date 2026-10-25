@@ -338,6 +338,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith('/api/state'):
             data=state(force='force=1' in self.path)
             self.respond(json.dumps(data,ensure_ascii=False).encode('utf8'))
+        elif re.fullmatch(r'/logos/(DS|CSC|SSJ|LDA|SC|PFC|ISC|CSH|EB|PZ)\.png',self.path):
+            image_path=ROOT/self.path.lstrip('/')
+            self.respond(image_path.read_bytes(),'image/png')
         elif self.path=='/' or self.path.startswith('/index.html'):
             self.respond((ROOT/'index.html').read_bytes(),'text/html; charset=utf-8')
         else:self.respond(b'No encontrado','text/plain',404)
