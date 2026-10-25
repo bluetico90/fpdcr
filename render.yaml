@@ -1,0 +1,15 @@
+# UNAFUT Live - Render: alojamiento sin pago (plan Free).
+# https://render.com/docs/free
+services:
+  - type: web
+    name: unafut-live-cr
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /health
+    envVars:
+      - key: OPEN_BROWSER
+        value: "0"
+      - key: HOST
+        value: 0.0.0.0
