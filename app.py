@@ -239,25 +239,19 @@ def parse_page(html):
     soup=BeautifulSoup(html,'html.parser')
     teams=parse_standings(soup)
     matches=enrich_matches(parse_matches(soup))
-    # Los partidos en juego no se incorporan automáticamente a la tabla de la fuente.
-    # Calcular una segunda clasificación PROVISIONAL, sólo si hay marcador confiable.
-    project=copy.deepcopy(teams)
-    bycode={t['code']:t for t in project}
-    applied=[]
-    for m in matches:
-        if m['status']!='en_vivo' or m['hs'] is None or m['as_'] is None:continue
-        h=bycode[m['home']];a=bycode[m['away']]
-        for t,goals,against in ((h,m['hs'],m['as_']),(a,m['as_'],m['hs'])):
-            t['pj']+=1;t['gf']+=goals;t['gc']+=against;t['gd']=t['gf']-t['gc']
-            if goals>against:t['g']+=1;t['pts']+=3
-            elif goals==against:t['e']+=1;t['pts']+=1
-            else:t['p']+=1
-        applied.append(m)
+
+    # V7.1: la fuente publica la clasificación con sus estadísticas actualizadas,
+    # inclusive partidos en vivo cuando ya los refleja. NO sumar un encuentro
+    # otra vez: eso duplicaba PJ, puntos, goles y resultados de los dos clubes.
+    # El estado «en vivo» se obtiene de los partidos y se mantiene independiente
+    # de la clasificación; el cintillo de V7 sigue mostrando ambos componentes.
+    live=any(m.get('status')=='en_vivo' for m in matches)
     now=datetime.now(TZ).isoformat(timespec='seconds')
-    return dict(teams=teams,provisional=project, matches=matches, live=bool(applied), projected=bool(applied),
-                stale=False, round=13, source=SOURCE,source_time=now,fetched_at=now,
-                status=('Clasificación provisional: se incluyen marcadores en juego.' if applied
-                    else 'Clasificación basada en la última tabla publicada por la fuente.'))
+    return dict(teams=teams, provisional=copy.deepcopy(teams), matches=matches,
+                live=live, projected=False, stale=False, round=13,
+                source=SOURCE,source_time=now,fetched_at=now,
+                status=('Clasificación de la fuente; partido(s) en vivo detectado(s).'
+                        if live else 'Clasificación basada en la tabla publicada por la fuente.'))
 
 cache=seed()
 lock=threading.Lock()
