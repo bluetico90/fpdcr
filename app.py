@@ -290,146 +290,171 @@ def state(force=False):
                 cache['error']=str(exc)[:200]
         return copy.deepcopy(cache)
 
-# Fuentes editoriales externas. Solo titulares, metadatos y enlaces; sin copiar artículos.
-# Algunos sitios pueden bloquear RSS, imágenes o lecturas automáticas: se omiten sin inventar.
+# Noticias: medios originales, enlaces verificables, sin duplicar artículos.
+# Usamos RSS cuando exista; si falla, portada pública del medio.
 NEWS_SOURCES = [
-    ('CRHoy', 'https://crhoy.com/feed/', 'crhoy.com'),
-    ('Diario Extra', 'https://www.diarioextra.com/feed/', 'diarioextra.com'),
-    ('DeportesCR', 'https://deportescr.net/feed/', 'deportescr.net'),
-    ('Grecia Deportes', 'https://greciadeportes.com/feed/', 'greciadeportes.com'),
-    ('Teletica', 'https://www.teletica.com/rss/deportes.xml', 'teletica.com'),
-    ('La Nación', 'https://www.nacion.com/arc/outboundfeeds/rss/category/puro-deporte/', 'nacion.com'),
-    ('La Teja', 'https://www.lateja.cr/arc/outboundfeeds/rss/category/deportes/', 'lateja.cr'),
+    ('CRHoy','https://crhoy.com/feed/','https://crhoy.com/deportes/','crhoy.com'),
+    ('Diario Extra','https://www.diarioextra.com/feed/','https://www.diarioextra.com/categoria/deportes/','diarioextra.com'),
+    ('DeportesCR','https://deportescr.net/feed/','https://deportescr.net/','deportescr.net'),
+    ('Grecia Deportes','https://greciadeportes.com/feed/','https://greciadeportes.com/','greciadeportes.com'),
+    ('Teletica','https://www.teletica.com/rss/deportes.xml','https://www.teletica.com/deportes','teletica.com'),
+    ('La Nación','https://www.nacion.com/arc/outboundfeeds/rss/category/puro-deporte/','https://www.nacion.com/puro-deporte/','nacion.com'),
+    ('La Teja','https://www.lateja.cr/arc/outboundfeeds/rss/category/deportes/','https://www.lateja.cr/deportes/','lateja.cr'),
 ]
-# Enlaces de búsqueda secundaria: se usan para titulares, no se inventan fotos ni URLs originales.
-NEWS_SEARCH_QUERY = ('(Saprissa OR Alajuelense OR Herediano OR Cartaginés OR Sporting FC '
-    'OR Puntarenas FC OR San Carlos OR Pérez Zeledón OR Escorpiones OR Inter San Carlos '
-    'OR Liga Promerica) (site:crhoy.com OR site:nacion.com OR site:teletica.com '
-    'OR site:deportescr.net OR site:diarioextra.com OR site:lateja.cr '
-    'OR site:greciadeportes.com OR site:espn.co.cr) when:7d')
-NEWS_CACHE={'items':[], 'fetched':0, 'updated':None}
+NEWS_SEARCH_QUERY = ('(Saprissa OR Alajuelense OR Herediano OR Cartaginés OR Sporting FC OR Puntarenas FC '
+    'OR San Carlos OR Pérez Zeledón OR Escorpiones OR Inter San Carlos OR Liga Promerica) '
+    '(site:crhoy.com OR site:nacion.com OR site:teletica.com OR site:deportescr.net '
+    'OR site:diarioextra.com OR site:lateja.cr OR site:greciadeportes.com) when:7d')
+NEWS_CACHE={'items':[], 'fetched':0, 'updated':None, 'sources':{}}
 NEWS_LOCK=threading.Lock()
 TEAM_NEWS=re.compile(r'\b(?:saprissa|alajuelense|herediano|cartagin[eé]s|sporting|puntarenas|'
     r'san carlos|p[eé]rez zeled[oó]n|escorpiones|inter san carlos|primera divisi[oó]n|'
     r'l[ií]ga promerica|liga deportiva|torneo apertura|torneo clausura|unafut)\b',re.I)
-ALLOWED_DOMAINS=tuple(src[2] for src in NEWS_SOURCES)+('espn.co.cr','espn.com')
+ALLOWED_DOMAINS=tuple(x[3] for x in NEWS_SOURCES)
 
-def trusted_url(url):
+def trusted_url(url, expected=None):
     try:
-        parsed=urlparse((url or '').strip())
-        domain=(parsed.hostname or '').lower()
-        return parsed.scheme=='https' and any(domain==d or domain.endswith('.'+d) for d in ALLOWED_DOMAINS)
-    except Exception: return False
+        v=urlparse((url or '').strip());d=(v.hostname or '').lower()
+        domains=(expected,) if expected else ALLOWED_DOMAINS
+        return v.scheme=='https' and v.username is None and v.password is None and any(d==x or d.endswith('.'+x) for x in domains)
+    except Exception:return False
 
 def safe_picture(url, article_url):
     if not url:return None
-    url=urljoin(article_url,url.strip())
-    parts=urlparse(url)
-    if parts.scheme!='https' or not parts.hostname or parts.username or parts.password:return None
-    if parts.hostname.lower() in ('localhost','127.0.0.1','0.0.0.0'):return None
+    url=urljoin(article_url,str(url).strip());u=urlparse(url)
+    if u.scheme!='https' or not u.hostname or u.username or u.password:return None
+    # only remote images, not local/private addresses
+    if u.hostname.lower() in ('localhost','127.0.0.1','0.0.0.0') or u.hostname.endswith('.local'):return None
     return url
 
 def local_date(value):
-    try:
-        return parsedate_to_datetime(value).astimezone(TZ).strftime('%d/%m/%Y')
+    try:return parsedate_to_datetime(value).astimezone(TZ).strftime('%d/%m/%Y')
     except Exception:
         try:return datetime.fromisoformat(value.replace('Z','+00:00')).astimezone(TZ).strftime('%d/%m/%Y')
         except Exception:return ''
 
-def parse_rss(name, url, domain):
-    """Retrieve allowed RSS/Atom XML; extract official media thumbnails when published."""
-    data=get_news_html(url)
-    root=ET.fromstring(data)
-    entries=[]
-    for el in list(root.findall('./channel/item'))+list(root.findall('{http://www.w3.org/2005/Atom}entry')):
-        title=(el.findtext('title') or el.findtext('{http://www.w3.org/2005/Atom}title') or '').strip()
-        link=(el.findtext('link') or '').strip()
-        if not link:
-            linktag=el.find('{http://www.w3.org/2005/Atom}link')
-            if linktag is not None:link=linktag.attrib.get('href','')
-        if not title or not trusted_url(link) or not TEAM_NEWS.search(title):continue
-        published=el.findtext('pubDate') or el.findtext('{http://www.w3.org/2005/Atom}updated') or ''
-        image=None
-        for tag in el.iter():
-            typ=tag.tag.rsplit('}',1)[-1].lower()
-            if typ in ('thumbnail','content') and 'url' in tag.attrib and ('media' in tag.tag.lower() or typ=='thumbnail'):
-                image=safe_picture(tag.attrib['url'],link)
-            elif typ=='enclosure' and tag.attrib.get('type','').startswith('image/'):
-                image=safe_picture(tag.attrib.get('url'),link)
-            if image:break
-        entries.append({'title':title,'source':name,'url':link,'published':local_date(published),
-                        'raw_date':published,'image':image})
-        if len(entries)>=12:break
-    return entries
-
 def get_news_html(url):
-    req=Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; UnafutLiveNews/1.0)',
+    req=Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; UNAFUTLive/1.1; noticias)',
              'Accept':'application/rss+xml,application/xml,text/html;q=0.8','Accept-Language':'es-CR,es;q=0.9'})
-    with urlopen(req,timeout=7) as resp:
+    with urlopen(req,timeout=5) as resp:
         if resp.status!=200:raise ValueError('HTTP '+str(resp.status))
-        return resp.read(2_000_000).decode('utf-8','replace')
+        return resp.read(1_500_000).decode('utf-8','replace')
 
-def article_image(news):
-    if news['image'] or not trusted_url(news['url']):return news
-    try:
-        soup=BeautifulSoup(get_news_html(news['url']),'html.parser')
-        for attr,val in [('property','og:image:secure_url'),('property','og:image'),('name','twitter:image')]:
-            tag=soup.find('meta',attrs={attr:val})
-            if tag and tag.get('content'):
-                news['image']=safe_picture(tag['content'],news['url'])
-                if news['image']:break
-    except Exception:pass
-    return news
-
-def google_headlines():
-    url='https://news.google.com/rss/search?q='+quote(NEWS_SEARCH_QUERY)+'&hl=es-419&gl=CR&ceid=CR:es-419'
-    root=ET.fromstring(get_news_html(url))
-    out=[]
-    for el in root.findall('./channel/item'):
-        title=(el.findtext('title') or '').strip()
-        link=(el.findtext('link') or '').strip()
-        src=el.find('source')
-        publisher=(src.text or '').strip() if src is not None else 'Noticias'
-        if not title or not link.startswith('https://') or not TEAM_NEWS.search(title):continue
-        if not any(x in publisher.lower() for x in ('crhoy','nación','nacion','teletica','extra','deportescr','grecia','la teja','espn')):continue
-        out.append(dict(title=title,source=publisher,url=link,published=local_date(el.findtext('pubDate') or ''),image=None))
+def parse_rss(name,url,domain):
+    root=ET.fromstring(get_news_html(url));out=[]
+    entries=list(root.findall('./channel/item'))+list(root.findall('{http://www.w3.org/2005/Atom}entry'))
+    for e in entries:
+        title=(e.findtext('title') or e.findtext('{http://www.w3.org/2005/Atom}title') or '').strip()
+        link=(e.findtext('link') or '').strip()
+        if not link:
+            tag=e.find('{http://www.w3.org/2005/Atom}link')
+            if tag is not None:link=tag.attrib.get('href','')
+        if not title or not trusted_url(link,domain) or not TEAM_NEWS.search(title):continue
+        stamp=e.findtext('pubDate') or e.findtext('{http://www.w3.org/2005/Atom}updated') or ''
+        pic=None
+        for tag in e.iter():
+            kind=tag.tag.rsplit('}',1)[-1].lower()
+            if kind in ('thumbnail','content') and 'url' in tag.attrib and ('media' in tag.tag.lower() or kind=='thumbnail'):
+                pic=safe_picture(tag.attrib['url'],link)
+            elif kind=='enclosure' and tag.attrib.get('type','').startswith('image/'):
+                pic=safe_picture(tag.attrib.get('url'),link)
+            if pic:break
+        out.append(dict(title=title,source=name,url=link,published=local_date(stamp),raw_date=stamp,image=pic))
         if len(out)>=10:break
     return out
 
+def parse_listing(name,url,domain):
+    """Read public sports index if feed is unavailable; never invent articles."""
+    doc=BeautifulSoup(get_news_html(url),'html.parser');out=[];seen=set()
+    for a in doc.select('main a[href], article a[href], a[href]'):
+        link=urljoin(url,a.get('href',''))
+        if not trusted_url(link,domain) or link in seen or link.rstrip('/')==url.rstrip('/'):continue
+        u=urlparse(link);path=u.path.strip('/')
+        if len(path)<15 or path.count('/')<1 or any(x in path.lower() for x in ('/categoria/','/tag/','/author/','/autor/','/feed/')):continue
+        head=a.find(['h2','h3','h4'])
+        title=(head.get_text(' ',strip=True) if head else a.get('aria-label') or a.get_text(' ',strip=True))
+        title=re.sub(r'\s+',' ',title).strip()
+        if not (20<=len(title)<=230) or not TEAM_NEWS.search(title):continue
+        seen.add(link)
+        img=a.find('img')
+        if img is None:
+            parent=a.parent
+            if parent and parent.name in ('article','div','li'):img=parent.find('img')
+        pic=None
+        if img:
+            src=img.get('data-src') or img.get('data-lazy-src') or img.get('src')
+            if not src and img.get('srcset'):src=img['srcset'].split(',')[0].strip().split(' ')[0]
+            pic=safe_picture(src,link)
+        out.append(dict(title=title,source=name,url=link,published='',raw_date='',image=pic))
+        if len(out)>=10:break
+    return out
+
+def source_news(src):
+    name,rss,listing,domain=src
+    try:
+        items=parse_rss(name,rss,domain)
+        if items:return name,items,'RSS'
+    except Exception:pass
+    try:
+        items=parse_listing(name,listing,domain)
+        return name,items,'Portada' if items else 'Sin artículos relacionados'
+    except Exception:return name,[],'No accesible'
+
+def article_image(item):
+    if item.get('image') or not trusted_url(item['url']):return item
+    try:
+        soup=BeautifulSoup(get_news_html(item['url']),'html.parser')
+        for attr,val in [('property','og:image:secure_url'),('property','og:image'),('name','twitter:image')]:
+            tag=soup.find('meta',attrs={attr:val})
+            if tag and tag.get('content'):
+                item['image']=safe_picture(tag['content'],item['url'])
+                if item['image']:break
+        if not item['published']:
+            tag=soup.find('meta',attrs={'property':'article:published_time'})
+            if tag and tag.get('content'):item['published']=local_date(tag['content'])
+    except Exception:pass
+    return item
+
+def google_headlines():
+    """Last resort only: Google News links have no original image by design."""
+    url='https://news.google.com/rss/search?q='+quote(NEWS_SEARCH_QUERY)+'&hl=es-419&gl=CR&ceid=CR:es-419'
+    root=ET.fromstring(get_news_html(url));out=[]
+    for e in root.findall('./channel/item'):
+        title=(e.findtext('title') or '').strip();link=(e.findtext('link') or '').strip();src=e.find('source')
+        publisher=(src.text or '').strip() if src is not None else 'Noticias'
+        if not title or not link.startswith('https://news.google.com/') or not TEAM_NEWS.search(title):continue
+        if not any(x in publisher.lower() for x in ('crhoy','nación','nacion','teletica','extra','deportescr','grecia','la teja')):continue
+        out.append(dict(title=title,source=publisher,url=link,published=local_date(e.findtext('pubDate') or ''),image=None,raw_date=''))
+        if len(out)>=8:break
+    return out
+
 def headlines():
-    """Cache 20 min; use original thumbnails only where sources publish and permit retrieval."""
     with NEWS_LOCK:
         if time.monotonic()-NEWS_CACHE['fetched']<1200:return NEWS_CACHE['items']
-        NEWS_CACHE['fetched']=time.monotonic()
-        previous=NEWS_CACHE['items']
-        found=[]
+        NEWS_CACHE['fetched']=time.monotonic();previous=NEWS_CACHE['items'];found=[];diag={}
         with ThreadPoolExecutor(max_workers=7) as pool:
-            jobs=[pool.submit(parse_rss,*entry) for entry in NEWS_SOURCES]
+            jobs=[pool.submit(source_news,s) for s in NEWS_SOURCES]
             for job in as_completed(jobs):
-                try:found.extend(job.result())
+                try:
+                    name,items,status=job.result();found.extend(items)
+                    diag[name]={'estado':status,'articulos':len(items)}
                 except Exception:pass
-        # Metadata fetch only for original trusted URLs, never third-party Google redirects.
-        candidates=sorted(found,key=lambda n:n.get('raw_date',''),reverse=True)[:18]
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            jobs=[pool.submit(article_image,item) for item in candidates]
-            enriched=[]
-            for job in as_completed(jobs):
-                try:enriched.append(job.result())
-                except Exception:pass
-        # Keep each publication once, omit duplicate story URLs.
+        # favor original media articles; enrich images from og:image
         unique={}
-        for item in enriched:
-            unique[item['url'].split('?')[0]]=item
-        result=list(unique.values())
-        if len(result)<6:
+        for item in found:unique.setdefault(item['url'].split('?')[0],item)
+        items=list(unique.values())[:21]
+        with ThreadPoolExecutor(max_workers=7) as pool:
+            enriched=list(pool.map(article_image,items))
+        # Source-first to maximize thumbnails; fill only if too few articles
+        if len(enriched)<6:
             try:
                 for item in google_headlines():
-                    unique.setdefault(item['url'].split('?')[0],item)
-                result=list(unique.values())
+                    if item['url'] not in unique:enriched.append(item)
             except Exception:pass
-        result=result[:12]
+        result=enriched[:12]
         if result:NEWS_CACHE['items']=result
         else:NEWS_CACHE['items']=previous
+        NEWS_CACHE['sources']=diag
         NEWS_CACHE['updated']=datetime.now(TZ).isoformat()
         return NEWS_CACHE['items']
 
@@ -444,8 +469,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/health':
             self.respond(b'{"status":"ok"}')
-        elif self.path.startswith('/api/news'):
-            self.respond(json.dumps({'items':headlines()},ensure_ascii=False).encode('utf8'))
+        elif self.path == '/api/news':
+            self.respond(json.dumps({'items':headlines(), 'updated':NEWS_CACHE['updated']},ensure_ascii=False).encode('utf8'))
+        elif self.path.startswith('/api/news-status'):
+            headlines()
+            self.respond(json.dumps({'updated':NEWS_CACHE['updated'], 'sources':NEWS_CACHE['sources'], 'total':len(NEWS_CACHE['items']), 'with_images':sum(bool(x.get('image')) for x in NEWS_CACHE['items'])},ensure_ascii=False).encode('utf8'))
         elif self.path.startswith('/api/state'):
             data=state(force='force=1' in self.path)
             self.respond(json.dumps(data,ensure_ascii=False).encode('utf8'))

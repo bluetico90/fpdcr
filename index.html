@@ -33,7 +33,7 @@ const sortTeams=ts=>[...ts].sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||a.nam
 // Escudos independientes 512x512 del catalogo FootyLogos; sin recortes de capturas.
 // Imagen alternativa: iniciales del equipo cuando el proveedor no esté disponible.
 const crestSlugs={DS:'deportivo-saprissa',CSC:'club-sport-cartagines',SSJ:'sporting-fc-costa-rica',LDA:'liga-deportiva-alajuelense',SC:'asociacion-deportiva-san-carlos',PFC:'puntarenas-fc',ISC:'inter-san-carlos',CSH:'club-sport-herediano',EB:'escorpiones-de-belen',PZ:'municipal-perez-zeledon'};
-const club=t=>{const code=String(t.code||'').toUpperCase();const slug=crestSlugs[code];return `<span class="crest">${slug?`<img src="https://www.footylogos.com/dls/logo/${slug}.png" data-club="${code}" alt="Escudo de ${safe(t.name)}" loading="lazy" referrerpolicy="no-referrer"><span class="crest-fallback" hidden>${safe(code)}</span>`:`<span class="crest-fallback">${safe(code)}</span>`}</span>`};
+const club=t=>{const code=String(t.code||'').toUpperCase();const slug=crestSlugs[code];return `<span class="crest">${slug?`<img src="https://www.footylogos.com/dls/logo/${slug}.png" data-club="${code}" alt="Escudo de ${safe(t.name)}" loading="lazy"><span class="crest-fallback" hidden>${safe(code)}</span>`:`<span class="crest-fallback">${safe(code)}</span>`}</span>`};
 // No insertar HTML en atributos onerror, que fue la causa del fallo anterior.
 document.addEventListener('error',ev=>{const img=ev.target;if(img?.tagName==='IMG'&&img.dataset.club){img.hidden=true;const fallback=img.parentElement?.querySelector('.crest-fallback');if(fallback)fallback.hidden=false;}},true);
 const getTeam=code=>app?.teams?.find(t=>t.code===code)||{code,name:code,logo:null};
@@ -55,7 +55,7 @@ async function update(force=false){
  }catch(e){$('signal').className='err';$('stamp').textContent='No se pudo actualizar';$('stale').classList.remove('hidden')}
  finally{busy=false;}
 }
-const newsImage=(n)=>{if(!n.image||!/^https:\/\//.test(n.image))return '';return `<img class="story-image" src="${safe(n.image)}" alt="Miniatura del artículo de ${safe(n.source)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.hidden=true">`};
+const newsImage=(n)=>{if(!n.image||!/^https:\/\//.test(n.image))return '';return `<img class="story-image" src="${safe(n.image)}" alt="Miniatura del artículo de ${safe(n.source)}" loading="lazy" onerror="this.hidden=true">`};
 async function loadNews(){try{const r=await fetch('/api/news',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json();const stories=(d.items||[]).filter(x=>/^https:\/\//.test(x.url));$('news-list').innerHTML=stories.length?stories.slice(0,9).map(n=>`<article class="story"><a class="story-link" href="${safe(n.url)}" target="_blank" rel="noopener noreferrer">${newsImage(n)}<div class="story-copy"><div class="meta">${safe(n.source)}</div><h3>${safe(n.title)}</h3></div></a><div class="published">${safe(n.published||'Fecha no disponible')} · Leer en el medio original ↗</div></article>`).join(''):'<div class="story-placeholder">No hay titulares recientes verificables por el momento.</div>'}catch(e){$('news-list').innerHTML='<div class="story-placeholder">Noticias temporalmente no disponibles.</div>'}}
 $('news-refresh').onclick=loadNews;
 update();loadNews();setInterval(()=>{if(!document.hidden){update();loadNews()}},300000);
