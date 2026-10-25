@@ -16,6 +16,10 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from email.utils import parsedate_to_datetime
+from xml.etree import ElementTree as ET
+from urllib.parse import quote
 
 from bs4 import BeautifulSoup
 
@@ -41,6 +45,16 @@ TEAMS = {
     'EB': ('Escorpiones', '#b68b37'),
     'PZ': ('Pérez Zeledón', '#2781c0'),
 }
+# Escudos alternativos verificados de Wikimedia Commons. Se prioriza el escudo actualizado de la fuente.
+LOGO_FALLBACK = {
+  'DS': 'https://commons.wikimedia.org/wiki/Special:FilePath/Escudo%20Saprissa%202012.svg',
+  'CSC': 'https://commons.wikimedia.org/wiki/Special:FilePath/Escudo%20del%20Club%20Sport%20Cartagin%C3%A9s.svg',
+  'SSJ': 'https://commons.wikimedia.org/wiki/Special:FilePath/Escudo%20Sporting%20SJ.svg',
+  'LDA': 'https://commons.wikimedia.org/wiki/Special:FilePath/Logo%20de%20la%20Liga%20Deportiva%20Alajuelense.svg',
+  'CSH': 'https://commons.wikimedia.org/wiki/Special:FilePath/Escudo%20del%20Club%20Sport%20Herediano.svg',
+  'PZ': 'https://commons.wikimedia.org/wiki/Special:FilePath/Escudo%20de%20la%20Asociaci%C3%B3n%20Deportiva%20Municipal%20de%20P%C3%A9rez%20Zeled%C3%B3n.png',
+}
+
 CODE_PATTERN = '|'.join(sorted(TEAMS, key=len, reverse=True))
 RESULT_REGEX = re.compile(rf'\b({CODE_PATTERN})\s+(\d+)\s*[-–:]\s*({CODE_PATTERN})\s+(\d+)\b')
 MATCH_REGEX = re.compile(rf'\b({CODE_PATTERN})\s*({CODE_PATTERN})?\s*(\d+)\s*[–-]\s*(\d+)\s*({CODE_PATTERN})\b')
@@ -63,7 +77,7 @@ def seed():
     teams = []
     for code,pj,pts,g,e,p,gf,gc,form in BOOT:
         name,color=TEAMS[code]
-        teams.append(dict(code=code,name=name,color=color,pj=pj,pts=pts,g=g,e=e,p=p,gf=gf,gc=gc,gd=gf-gc,form=list(form)[:5],logo=None))
+        teams.append(dict(code=code,name=name,color=color,pj=pj,pts=pts,g=g,e=e,p=p,gf=gf,gc=gc,gd=gf-gc,form=list(form)[:5],logo=LOGO_FALLBACK.get(code)))
     return dict(teams=teams, matches=[], source=SOURCE, source_time='2026-10-24', fetched_at=None, live=False,
                 stale=True, status='Sin conexión: se muestra una referencia del 24/10/2026.', round=13, projected=False)
 
@@ -153,7 +167,7 @@ def parse_standings(soup):
                 if not (0<=pj<=35 and 0<=pts<=100 and 0<=g<=35 and 0<=e<=35 and 0<=p<=35):continue
                 name,color=TEAMS[code]
                 teams.append(dict(code=code,name=name,color=color,pj=pj,pts=pts,g=g,e=e,p=p,gf=gf,gc=gc,gd=gf-gc,
-                    form=parse_form(tds[1],code),logo=find_logo(soup,tds[1],code)))
+                    form=parse_form(tds[1],code),logo=find_logo(soup,tds[1],code) or LOGO_FALLBACK.get(code)))
             except (TypeError,ValueError,AttributeError):continue
         if len(teams)==10:
             return teams
@@ -187,13 +201,44 @@ def parse_matches(soup):
         if status=='programado' and scored:
             # Si no podemos confirmar el estado, no usarlo para proyecciones.
             status='desconocido'
-        matches.append(dict(home=home,away=away,hs=hs,as_=as_,status=status,description=raw[:145]))
+        matches.append(dict(home=home,away=away,hs=hs,as_=as_,status=status,description=raw[:145],url=urljoin(SOURCE,href),kickoff=None,round=13))
     return matches[:35]
+
+MONTHS={'ene':1,'feb':2,'mar':3,'abr':4,'may':5,'jun':6,'jul':7,'ago':8,'sept':9,'sep':9,'oct':10,'nov':11,'dic':12}
+def detail_match(m):
+    """Obtiene fecha/hora de la página de partido, convertida a UTC-6. No inventar horarios."""
+    try:
+        html=get_html(m['url'])
+        soup=BeautifulSoup(html,'html.parser')
+        text=' '.join(soup.get_text(' ',strip=True).split())
+        pattern=r'(?:Inicio(?:\s*[·:-]\s*Costa Rica)?|Inicio)\s*(\d{1,2})\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|sept|oct|nov|dic)[a-z]*\s+(20\d{2}),?\s+(\d{1,2}):(\d{2})\s*([ap])\.?\s*m\.?'
+        found=re.search(pattern,text,re.I)
+        if found:
+            d,month,year,h,mi,mer=found.groups()
+            hour=int(h)%12+(12 if mer.lower()=='p' else 0)
+            dt=datetime(int(year),MONTHS[month.lower()],int(d),hour,int(mi),tzinfo=TZ)
+            m['kickoff']=dt.isoformat(timespec='minutes')
+        # Estado definitivo solo con evidencia explícita del detalle.
+        if re.search(r'\bFinalizado\b',text[:1300],re.I):m['status']='finalizado'
+        elif re.search(r'\b(No iniciado|Antes del partido)\b',text[:1300],re.I) and m['status']=='desconocido':m['status']='programado'
+    except Exception:
+        pass
+    return m
+
+def enrich_matches(matches):
+    # Limitar conexiones: una vez por ciclo de caché, y paralelas para evitar bloqueos.
+    if not matches:return matches
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures=[pool.submit(detail_match,m) for m in matches[:12]]
+        for f in as_completed(futures):
+            try:f.result()
+            except Exception:pass
+    return matches
 
 def parse_page(html):
     soup=BeautifulSoup(html,'html.parser')
     teams=parse_standings(soup)
-    matches=parse_matches(soup)
+    matches=enrich_matches(parse_matches(soup))
     # Los partidos en juego no se incorporan automáticamente a la tabla de la fuente.
     # Calcular una segunda clasificación PROVISIONAL, sólo si hay marcador confiable.
     project=copy.deepcopy(teams)
@@ -232,7 +277,7 @@ def state(force=False):
                         logo_soup=BeautifulSoup(get_html('https://futstatscr.com/teams'),'html.parser')
                         for t in new['teams']:
                             if not t['logo']:
-                                t['logo']=find_logo(logo_soup,logo_soup,t['code'])
+                                t['logo']=find_logo(logo_soup,logo_soup,t['code']) or LOGO_FALLBACK.get(t['code'])
                         for t in new['provisional']:
                             t['logo']=next((base['logo'] for base in new['teams'] if base['code']==t['code']),None)
                     except Exception:
@@ -245,6 +290,38 @@ def state(force=False):
                 cache['error']=str(exc)[:200]
         return copy.deepcopy(cache)
 
+NEWS_CACHE={'items':[], 'fetched':0}
+NEWS_LOCK=threading.Lock()
+def headlines():
+    """Solo titulares/enlaces de Google News RSS, evitando republicar artículos completos."""
+    with NEWS_LOCK:
+        if time.monotonic()-NEWS_CACHE['fetched'] < 900:return NEWS_CACHE['items']
+        NEWS_CACHE['fetched']=time.monotonic()
+        query='(Saprissa OR Alajuelense OR Herediano OR Cartaginés OR "primera división" Costa Rica) (site:crhoy.com OR site:nacion.com OR site:espn.com) when:7d'
+        url='https://news.google.com/rss/search?q='+quote(query)+'&hl=es-419&gl=CR&ceid=CR:es-419'
+        try:
+            xml=get_html(url)
+            root=ET.fromstring(xml)
+            results=[]
+            for el in root.findall('./channel/item'):
+                title=(el.findtext('title') or '').strip()
+                link=(el.findtext('link') or '').strip()
+                src=el.find('source')
+                publisher=(src.text or '').strip() if src is not None else 'Noticias'
+                pub=el.findtext('pubDate') or ''
+                if not title or not link.startswith('https://'):continue
+                if publisher.lower() not in ['crhoy.com','la nación','la nacion','espn','espn deportes','crhoy','nacion.com'] and not any(k in publisher.lower() for k in ['crhoy','nación','espn']):continue
+                try:
+                    d=parsedate_to_datetime(pub).astimezone(TZ).strftime('%d/%m/%Y')
+                except Exception:d=''
+                results.append(dict(title=title,source=publisher,url=link,published=d))
+                if len(results)==6:break
+            NEWS_CACHE['items']=results
+        except Exception:
+            # Nunca mostrar titulares ficticios si RSS está inaccesible.
+            pass
+        return NEWS_CACHE['items']
+
 class Handler(BaseHTTPRequestHandler):
     def respond(self,data,ctype='application/json; charset=utf-8',status=200):
         self.send_response(status)
@@ -256,6 +333,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/health':
             self.respond(b'{"status":"ok"}')
+        elif self.path.startswith('/api/news'):
+            self.respond(json.dumps({'items':headlines()},ensure_ascii=False).encode('utf8'))
         elif self.path.startswith('/api/state'):
             data=state(force='force=1' in self.path)
             self.respond(json.dumps(data,ensure_ascii=False).encode('utf8'))
