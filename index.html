@@ -15,14 +15,45 @@ body{background-color:#06172f;background-image:linear-gradient(180deg,rgba(4,21,
 .table-status i.on{background:#2ac887;box-shadow:0 0 0 3px rgba(42,200,135,.12)}
 @media(max-width:650px){body{background-attachment:scroll;background-size:auto 100vh}.panel-title{display:flex;align-items:center;gap:8px}.table-status{font-size:9px}}
 .photo-credit{width:100%;color:#9eb3cb;font-size:10px}.photo-credit a{color:#c0d4eb;text-decoration:underline}
-.story-link{display:flex;align-items:flex-start;gap:13px;min-height:98px}.story-image{width:112px;height:82px;object-fit:cover;flex-shrink:0;border-radius:5px;background:#153653;border:1px solid #34577b}.story-copy{min-width:0;flex:1}.story .meta{margin-bottom:5px}.story-image[hidden]{display:none!important}.story .published{margin-top:auto}.story h3{font-size:13px;line-height:1.35}.news-body .story:has(.story-image:not([hidden])){min-height:146px}@media(max-width:650px){.story-image{width:102px;height:78px}}</style></head><body>
+.story-link{display:flex;align-items:flex-start;gap:13px;min-height:98px}.story-image{width:112px;height:82px;object-fit:cover;flex-shrink:0;border-radius:5px;background:#153653;border:1px solid #34577b}.story-copy{min-width:0;flex:1}.story .meta{margin-bottom:5px}.story-image[hidden]{display:none!important}.story .published{margin-top:auto}.story h3{font-size:13px;line-height:1.35}.news-body .story:has(.story-image:not([hidden])){min-height:146px}@media(max-width:650px){.story-image{width:102px;height:78px}}
+/* V6: barra dinámica fija, compacta y accesible */
+.ticker-live{position:sticky;top:0;z-index:1000;background:rgba(5,23,48,.975);border-bottom:1px solid #40688a;box-shadow:0 8px 18px rgba(0,7,23,.29);backdrop-filter:blur(8px)}
+.ticker-shell{max-width:1280px;margin:auto;display:flex;align-items:stretch;gap:16px;min-height:70px;padding:8px 24px}
+.ticker-heading{display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:112px;border-right:1px solid #2a4d70;padding-right:17px}
+.ticker-label{font-size:12px;font-weight:900;letter-spacing:.08em;color:#fff;white-space:nowrap}.ticker-label b{color:var(--gold)}
+.ticker-caption{font-size:10px;color:#b5cade;font-weight:600}
+.ticker-content{display:flex;align-items:center;gap:0;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;scrollbar-color:#3d6788 transparent;scroll-snap-type:x proximity;min-width:0;flex:1}
+.ticker-team{display:flex;align-items:center;gap:9px;padding:4px 16px;border-right:1px solid #365675;flex:0 0 auto;min-width:132px;scroll-snap-align:start;text-decoration:none}
+.ticker-team:hover{background:rgba(255,255,255,.06);text-decoration:none}
+.ticker-team .crest{width:28px;height:28px}.ticker-team .ticker-rank{color:#c3d8ea;font-size:11px;font-weight:800}
+.ticker-team .ticker-abbr{font-size:12px;font-weight:900;color:#fff;white-space:nowrap}
+.ticker-team .ticker-numbers{font-size:10px;color:#d0deed;white-space:nowrap}.ticker-team .ticker-numbers strong{color:#f5cb55}
+.ticker-livegame{display:flex;align-items:center;gap:13px;flex:0 0 auto;padding:7px 16px;border-right:1px solid #315475;scroll-snap-align:start;color:#fff}
+.ticker-livegame .crest{width:30px;height:30px}.ticker-livegame .ticker-club{font-size:12px;font-weight:800;white-space:nowrap}
+.ticker-score{background:#071b35;color:#fff;border:1px solid #3c6388;border-radius:5px;padding:6px 12px;font-size:18px;font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ticker-livepill{display:inline-flex;align-items:center;background:#be2d42;border-radius:4px;color:#fff;font-size:10px;padding:5px 7px;font-weight:900;white-space:nowrap}
+.ticker-wait{font-size:12px;color:#c1d4e9;padding:8px}
+/* V6: banners hechos con las identidades reales disponibles de los negocios */
+.sponsors{margin-top:24px}.ad-disclosure{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#a9bbcd;font-weight:700}
+.sponsor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:16px}
+.sponsor-link{display:block;overflow:hidden;border-radius:8px;border:1px solid #345878;background:#f9f1e8;transition:transform .15s,border-color .15s}
+.sponsor-link:hover{transform:translateY(-2px);border-color:var(--gold)}
+.sponsor-link:focus-visible{outline:3px solid var(--gold);outline-offset:4px}
+.sponsor-link img{display:block;width:100%;height:auto;aspect-ratio:1400/420;object-fit:cover}
+#clasificacion,#jornada,#patrocinadores,#noticias{scroll-margin-top:92px}
+@media(max-width:800px){.sponsor-grid{grid-template-columns:1fr}.ticker-shell{padding:7px 12px;min-height:62px;gap:8px}.ticker-heading{min-width:87px;padding-right:9px}.ticker-label{font-size:10px}.ticker-caption{font-size:9px}.ticker-team{min-width:122px;padding:3px 11px}.ticker-team .crest{width:25px;height:25px}.ticker-livegame{gap:8px;padding:5px 10px}.ticker-livegame .crest{width:23px;height:23px}.ticker-score{font-size:15px;padding:4px 7px}.ticker-club{font-size:10px!important}}
+@media(max-width:800px){.sponsor-link img{aspect-ratio:auto;object-fit:contain}}
+@media(max-width:500px){.ticker-heading{min-width:74px}.ticker-team{min-width:116px}.sponsors{margin-top:16px}.sponsor-grid{padding:10px;gap:10px}.ticker-livepill{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.sponsor-link{transition:none}}
+</style></head><body>
 <div class="sitebar"><div class="sitebar-inner"><a class="brand" href="/"><span class="brand-mark">UL</span><span>UNAFUT <span>LIVE</span></span></a><nav class="nav"><a href="#clasificacion">Clasificación</a><a href="#jornada">Jornada</a><a href="#noticias">Noticias</a></nav></div></div>
-<div class="ticker"><div class="ticker-inner"><span><b>PRIMERA DIVISIÓN</b> &nbsp; / &nbsp; APERTURA 2026</span><span>Fútbol de Costa Rica · UTC−6</span></div></div>
+<div class="ticker ticker-live" id="sticky-bar" role="region" aria-label="Marcadores y posiciones rápidas"><div class="ticker-shell"><div class="ticker-heading"><span class="ticker-label">UNAFUT <b>LIVE</b></span><span id="ticker-mode" class="ticker-caption">Posiciones</span></div><div id="ticker-content" class="ticker-content" tabindex="0" aria-label="Clasificación compacta"><span class="ticker-wait">Consultando posiciones…</span></div></div></div>
 <div class="wrap"><section class="mast"><div><div class="kicker">Fútbol nacional / Temporada 2026</div><h1>Primera <em>División</em></h1><small>Posiciones, jornada y noticias del fútbol nacional</small></div><div class="sync"><i id="signal"></i><span id="stamp">Cargando estadísticas…</span></div></section>
 <div class="main-grid"><main class="panel" id="clasificacion"><div class="panel-title"><div class="section-index"><span class="line"></span><h2>Clasificación general</h2></div><div class="table-status" role="status" aria-live="polite"><i id="table-status-dot"></i><span id="table-status-label">Actualizando</span></div></div>
 <div class="table-scroll"><table class="standings"><thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>PTS</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>GD</th><th>Últimos 5</th></tr></thead><tbody id="rows"></tbody></table></div>
 <div class="legend"><span><b class="win"></b>Victoria</span><span><b class="draw"></b>Empate</span><span><b class="loss"></b>Derrota</span><span><b style="background:var(--gold)"></b>Zona de clasificación</span></div><div id="stale" class="stale hidden" role="status">Algunos datos podrían estar desactualizados.</div></main>
 <aside class="side"><section class="panel" id="jornada"><div class="panel-title"><div class="section-index"><span class="line"></span><h2>Partidos de la jornada</h2></div></div><div id="match-list" class="empty-fixtures">Consultando calendario…</div></section></aside></div>
+<section class="sponsors panel" id="patrocinadores" aria-label="Anuncios de patrocinadores"><div class="panel-title"><div class="section-index"><span class="line"></span><h2>Patrocinadores</h2></div><span class="ad-disclosure">Publicidad</span></div><div class="sponsor-grid"><a class="sponsor-link" href="https://wa.me/50689440909?text=Hola%2C%20vi%20su%20anuncio%20en%20UNAFUT%20Live%20y%20quiero%20informaci%C3%B3n%20de%20Tiempos%20Golfito." target="_blank" rel="noopener noreferrer" aria-label="Escribir a Tiempos Golfito por WhatsApp"><picture><source media="(max-width: 650px)" srcset="/ads/tiempos-golfito-mobile.png"><img src="/ads/tiempos-golfito.png" alt="Tiempos Golfito, atención por WhatsApp" loading="lazy" width="1400" height="420"></picture></a><a class="sponsor-link" href="https://wa.me/50687018540?text=Hola%2C%20vi%20Cabinas%20Golfito%20en%20UNAFUT%20Live%20y%20quiero%20consultar%20disponibilidad." target="_blank" rel="noopener noreferrer" aria-label="Consultar reservación a Cabinas Golfito por WhatsApp"><picture><source media="(max-width: 650px)" srcset="/ads/cabinas-golfito-mobile.png"><img src="/ads/cabinas-golfito.png" alt="Cabinas Golfito, reservaciones por WhatsApp" loading="lazy" width="1400" height="420"></picture></a></div></section>
 <section class="panel news" id="noticias"><div class="panel-title"><div class="section-index"><span class="line"></span><h2>Noticias del fútbol nacional</h2></div><div class="tools"><button id="news-refresh">↻ Noticias</button></div></div><div id="news-list" class="news-body"><div class="story-placeholder">Cargando titulares recientes…</div></div></section>
 <footer class="footer"><span>UNAFUT LIVE · Medio independiente. No afiliado oficialmente a UNAFUT.</span><span>Escudos: <a target="_blank" rel="noopener noreferrer" href="https://www.footylogos.com/es/country/costa-rica">FootyLogos</a> · Resultados: <a target="_blank" rel="noopener noreferrer" href="https://futstatscr.com/">FutStatsCR</a> · Noticias enlazadas a sus medios originales.</span><div class="photo-credit">Fondo: <a href="https://commons.wikimedia.org/wiki/File:Panorama_Estadio_Nacional_de_Costa_Rica.jpg" target="_blank" rel="noopener noreferrer">Panorama del Estadio Nacional de Costa Rica</a> · Nyarlazul · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a> (imagen con filtro azul).</div></footer></div>
 <script>
@@ -39,13 +70,29 @@ document.addEventListener('error',ev=>{const img=ev.target;if(img?.tagName==='IM
 const getTeam=code=>app?.teams?.find(t=>t.code===code)||{code,name:code,logo:null};
 const dots=form=>`<span class="form">${Array.from({length:5},(_,i)=>{let a=form?.[i];let label=a==='W'?'Victoria':a==='L'?'Derrota':a==='D'?'Empate':'Sin resultado';return `<i class="${a==='W'?'win':a==='L'?'loss':a==='D'?'draw':'empty'}" title="${label}" aria-label="${label}"></i>`}).join('')}</span>`;
 const abbrev={DS:'SAP',CSC:'CSC',SSJ:'SFC',LDA:'LDA',SC:'ASC',ISC:'ISC',PFC:'PFC',CSH:'CSH',EB:'ESC',PZ:'MPZ'};
+
+function renderTicker(){
+ const bar=$('ticker-content'),tag=$('ticker-mode'); if(!app||!bar||!tag)return;
+ const active=(app.matches||[]).filter(m=>m.status==='en_vivo');
+ if(active.length){
+   tag.textContent=app.stale?'Marcadores sin verificar':'Marcadores en vivo';
+   bar.setAttribute('aria-label','Marcadores de partidos en curso');
+   bar.innerHTML=active.map(m=>{const home=getTeam(m.home),away=getTeam(m.away);const score=m.hs!=null&&m.as_!=null?`${safe(m.hs)} – ${safe(m.as_)}`:'–';return `<div class="ticker-livegame"><span class="ticker-livepill">${app.stale?'POR CONFIRMAR':'● EN VIVO'}</span>${club(home)}<span class="ticker-club">${safe(abbrev[m.home]||m.home)}</span><span class="ticker-score">${score}</span>${club(away)}<span class="ticker-club">${safe(abbrev[m.away]||m.away)}</span></div>`}).join('');
+ }else{
+   tag.textContent=app.stale?'Posiciones · datos anteriores':'Posiciones · PJ / PTS';
+   bar.setAttribute('aria-label','Los diez equipos con sus partidos jugados y puntos');
+   const current=app.projected&&Array.isArray(app.provisional)?app.provisional:app.teams;
+   bar.innerHTML=sortTeams(current).map((t,i)=>`<a class="ticker-team" href="#clasificacion" title="${safe(t.name)} · ${safe(t.pj)} PJ · ${safe(t.pts)} PTS"><span class="ticker-rank">${i+1}</span>${club(t)}<span><span class="ticker-abbr">${safe(abbrev[t.code]||t.code)}</span><br><span class="ticker-numbers">${safe(t.pj)} PJ · <strong>${safe(t.pts)} PTS</strong></span></span></a>`).join('');
+ }
+}
+
 function fixtures(){const matches=app?.matches||[];if(!matches.length){$('match-list').innerHTML='<div class="empty-fixtures">No hay encuentros verificados disponibles actualmente.</div>';return}
  const sorted=[...matches].sort((a,b)=>{const da=a.kickoff?Date.parse(a.kickoff):Infinity,db=b.kickoff?Date.parse(b.kickoff):Infinity;return da-db});let prior='';
  $('match-list').innerHTML=sorted.slice(0,15).map(m=>{const when=m.kickoff?new Date(m.kickoff):null,day=when&&!isNaN(when)?datefmt.format(when):'Fecha pendiente';let header=day!==prior?`<div class="fixtures-date">${safe(day)} · JORNADA ${safe(m.round||app.round||13)}</div>`:'';prior=day;const live=m.status==='en_vivo',done=m.status==='finalizado';const middle=done||live?(m.hs!=null&&m.as_!=null?`${m.hs} – ${m.as_}`:'—'):when&&!isNaN(when)?timefmt.format(when):'Por definir';return `${header}<div class="match"><span class="sideclub">${safe(abbrev[m.home]||m.home)} ${club(getTeam(m.home))}</span><div><div class="pillscore ${!done&&!live?'kickoff':''}">${safe(middle)}</div><div class="match-status ${live?'live':''}">${live?'● EN VIVO':done?'FINALIZADO':'POR JUGAR'}</div></div><span class="sideclub right">${club(getTeam(m.away))} ${safe(abbrev[m.away]||m.away)}</span></div>`}).join('')}
 function render(){if(!app)return;const base=app.projected&&Array.isArray(app.provisional)?app.provisional:app.teams;const ranked=sortTeams(base);let selected=ranked;
  $('rows').innerHTML=selected.map(t=>{let rank=ranked.findIndex(x=>x.code===t.code)+1;return `<tr class="${rank<=4?'qualify':''}"><td><span class="rank">${rank}</span></td><td><div class="club-name">${club(t)}<span>${safe(t.name)}</span></div></td><td>${t.pj}</td><td class="pts">${t.pts}</td><td>${t.g}</td><td>${t.e}</td><td>${t.p}</td><td>${t.gf}</td><td>${t.gc}</td><td class="${t.gd>0?'gdpos':t.gd<0?'gdneg':''}">${t.gd>0?'+':''}${t.gd}</td><td>${dots(t.form)}</td></tr>`}).join('');
  const live=(app.matches||[]).some(m=>m.status==='en_vivo');$('table-status-label').textContent=live?'En vivo':'Actualizada';$('table-status-dot').className=live?'on':'';
- $('signal').className=app.stale?'err':'ok';$('stamp').textContent=app.stale?'Datos pendientes de actualización':app.fetched_at?'Actualizado: '+datefmt.format(new Date(app.fetched_at))+' '+timefmt.format(new Date(app.fetched_at)):'Actualización pendiente';$('stale').classList.toggle('hidden',!app.stale);fixtures()}
+ $('signal').className=app.stale?'err':'ok';$('stamp').textContent=app.stale?'Datos pendientes de actualización':app.fetched_at?'Actualizado: '+datefmt.format(new Date(app.fetched_at))+' '+timefmt.format(new Date(app.fetched_at)):'Actualización pendiente';$('stale').classList.toggle('hidden',!app.stale);fixtures();renderTicker()}
 async function update(force=false){
  if(busy)return;busy=true;
  try{const r=await fetch('/api/state'+(force?'?force=1':''),{cache:'no-store'});
