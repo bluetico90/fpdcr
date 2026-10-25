@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" role="img" aria-label="FPD CR">
+<defs>
+<linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#163c6d"/>
+<stop offset="100%" stop-color="#0a2243"/>
+</linearGradient>
+</defs>
+<path d="M36 4 58 12v20c0 15-9.8 27.7-22 35.5C23.8 59.7 14 47 14 32V12L36 4Z" fill="url(#g1)" stroke="#f4c342" stroke-width="3"/>
+<circle cx="36" cy="28" r="10.2" fill="#f8fbff" stroke="#f4c342" stroke-width="2"/>
+<path d="M36 18.8l4 2.9-1.6 4.8h-5l-1.6-4.8 4.2-2.9Zm-8.2 7.1 4.6 1.4 1.5 4.7-4 2.9-4-2.9.9-6.1Zm16.4 0 2.5 6.1-4 2.9-4-2.9 1.5-4.7 4-1.4Zm-10.2 9.1h4l1.6 4.8-4 2.9-4.2-2.9 2.6-4.8Zm1.9 15.7h-9.6v-3.5h5.4v-1.8h-4.4v-3.3h8.6v3.4H31v1.7h4.9v3.5Zm2.2 0V42h5.6c2.7 0 4.5 1.5 4.5 4.1s-1.8 4.6-4.7 4.6H38.1Zm4-3.6h1c1.1 0 1.9-.4 1.9-1.3 0-.9-.8-1.3-1.9-1.3h-1v2.6Z" fill="#f4c342"/>
+</svg>

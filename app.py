@@ -486,6 +486,23 @@ class Handler(BaseHTTPRequestHandler):
         elif re.fullmatch(r'/logos/(DS|CSC|SSJ|LDA|SC|PFC|ISC|CSH|EB|PZ)\.png',self.path):
             image_path=ROOT/self.path.lstrip('/')
             self.respond(image_path.read_bytes(),'image/png')
+        elif self.path in ('/favicon.ico','/favicon.svg','/favicon-32x32.png','/favicon-16x16.png','/apple-touch-icon.png','/android-chrome-192x192.png','/android-chrome-512x512.png','/site.webmanifest'):
+            static_map={
+                '/favicon.ico':('favicon.ico','image/x-icon'),
+                '/favicon.svg':('favicon.svg','image/svg+xml'),
+                '/favicon-32x32.png':('favicon-32x32.png','image/png'),
+                '/favicon-16x16.png':('favicon-16x16.png','image/png'),
+                '/apple-touch-icon.png':('apple-touch-icon.png','image/png'),
+                '/android-chrome-192x192.png':('android-chrome-192x192.png','image/png'),
+                '/android-chrome-512x512.png':('android-chrome-512x512.png','image/png'),
+                '/site.webmanifest':('site.webmanifest','application/manifest+json'),
+            }
+            filename, mime = static_map[self.path]
+            file_path = ROOT/filename
+            if file_path.is_file():
+                self.respond(file_path.read_bytes(), mime)
+            else:
+                self.respond(b'Archivo no encontrado','text/plain',404)
         elif self.path=='/' or self.path.startswith('/index.html'):
             self.respond((ROOT/'index.html').read_bytes(),'text/html; charset=utf-8')
         else:self.respond(b'No encontrado','text/plain',404)
