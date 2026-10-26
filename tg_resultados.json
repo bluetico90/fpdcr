@@ -3,9 +3,9 @@
   "sorteos": [
     {
       "pais": "Nicaragua",
-      "fecha": "2026-10-25",
-      "hora": "21:00",
-      "numero": "14"
+      "fecha": "2026-10-26",
+      "hora": "11:00",
+      "numero": "18"
     },
     {
       "pais": "Honduras",
@@ -20,10 +20,10 @@
       "numero": "35"
     },
     {
-      "pais": "Nicaragua",
+      "pais": "Tica",
       "fecha": "2026-10-26",
-      "hora": "11:00",
-      "numero": "18"
+      "hora": "13:00",
+      "numero": "24"
     }
   ]
 }
