@@ -110,6 +110,8 @@ body{background-color:#06172f;background-image:linear-gradient(180deg,rgba(4,21,
 @media(max-width:1100px){.mast{grid-template-columns:1fr;align-items:start;padding:14px 0 12px}.mast-right{max-width:480px;width:100%}.mast-intro h1{font-size:clamp(28px,5vw,43px)}}
 @media(max-width:650px){.tg-visual{display:none}.tg-mobile{display:block;background:linear-gradient(145deg,#ffedda,#f6dacb);color:#055469;border:1px solid #cfb49d;border-radius:10px;padding:12px;box-shadow:0 8px 20px #06162844}.tg-mobile-top{display:flex;align-items:center;gap:10px}.tg-mobile-top img{width:39%;max-width:150px;height:auto;border-radius:8px}.tg-mobile-top>div{display:flex;flex-direction:column;min-width:0}.tg-mobile-top strong{font-size:15px;color:#eb4777;line-height:1.1;font-weight:950}.tg-mobile-top span{font-size:12px;color:#095c6b}.tg-mobile-grid{display:grid;grid-template-columns:32% minmax(0,1fr);gap:8px;margin-top:8px}.tg-mobile-latest{border-radius:8px;background:#fffaf5;border:1px solid #df7994;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;min-width:0}.tg-mobile-latest>span{font-size:10px;line-height:1.1;background:#ec5585;border-radius:5px;padding:4px;color:white;font-weight:950;text-align:center;text-shadow:0 1px 3px #8a345e}.tg-mobile-latest strong{font-size:46px;line-height:1.1;font-variant-numeric:tabular-nums;color:#006476}.tg-mobile-latest small{text-align:center;font-size:10px;font-weight:750;color:#02556a}.tg-mobile-past{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;min-width:0}.tg-mobile-mini{min-width:0;background:#fffaf5;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;overflow:hidden;padding-bottom:7px}.tg-mobile-mini .time{background:#008495;color:white;font-weight:850;font-size:10px;padding:5px 1px;width:100%;text-align:center;white-space:nowrap}.tg-mobile-mini .country{font-size:10px;font-weight:900;text-align:center;padding:5px 1px 0;line-height:1.15;overflow-wrap:anywhere}.tg-mobile-mini .num{font-size:26px;color:#005a72;font-weight:950;font-variant-numeric:tabular-nums;line-height:1.1}.tg-mobile-actions{display:flex;gap:8px;margin-top:9px}.tg-mobile-actions a{flex:1;display:grid;place-items:center;border-radius:6px;background:#007b90;color:white;font-size:11px;font-weight:850;padding:8px 6px;text-align:center}.tg-mobile-actions a+ a{background:#e95c81}.tg-status{text-align:left;font-size:10px}.mast{padding-top:12px}.mast-right .sync{align-self:flex-start}}
 
+/* FPD CR V7.8 — aviso compacto de fecha anterior */
+.tg-mini-time{font-size:2.05cqw}
 /* FPD CR V7 — Orden correcto: en vivo + clasificación completa */
 .ticker-section-label{display:inline-flex;align-items:center;flex:0 0 auto;align-self:stretch;padding:0 15px;border-right:1px solid #365675;border-left:3px solid var(--gold);background:#102f52;color:#f5cb55;font-size:10px;font-weight:950;letter-spacing:.09em;white-space:nowrap}
 /* Banderas gráficas locales: nunca emojis que Windows pueda mostrar como NI / HN / SV */
@@ -232,11 +234,16 @@ async function loadTG(){
   const allowed=Object.keys(TG_FLAGS);
   // V7.4: aceptar nombres habituales sin descartar sorteos publicados.
   const aliases={'Nica':'Nicaragua','Salvador':'El Salvador','Panamá':'Panameña'};
-  // A igual hora, el último elemento escrito en el JSON es el más reciente.
+  // V7.8: cada sorteo tiene su propia fecha, permitiendo resultados de ayer.
+  // Si falta una fecha individual, usar la fecha general por compatibilidad.
+  // Ante empate de fecha y hora, gana el último registro del JSON.
+  const isTGDate=x=>/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(x||'')&&!isNaN(Date.parse(x+'T12:00:00'));
+  const fallbackDate=isTGDate(data.fecha)?data.fecha:null;
   const entries=(Array.isArray(data.sorteos)?data.sorteos:[])
-    .map((x,i)=>({...x,pais:aliases[x.pais]||x.pais,i}))
-    .filter(x=>allowed.includes(x.pais)&&/^\d{2}:\d{2}$/.test(x.hora)&&/^\d{2}$/.test(String(x.numero))&&(+x.hora.slice(0,2))<24&&(+x.hora.slice(3))<60)
-    .sort((a,b)=>b.hora.localeCompare(a.hora)||b.i-a.i);
+    .map((x,i)=>({...x,pais:aliases[x.pais]||x.pais,fecha:x.fecha||fallbackDate,i}))
+    .filter(x=>allowed.includes(x.pais)&&isTGDate(x.fecha)&&/^\d{2}:\d{2}$/.test(x.hora)&&/^\d{2}$/.test(String(x.numero))&&(+x.hora.slice(0,2))<24&&(+x.hora.slice(3))<60)
+    .sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.hora.localeCompare(a.hora)||b.i-a.i);
+  const tgTimeWithDate=x=>!x?'Pendiente':x.fecha===tgToday()?tgTime(x.hora):x.fecha===new Intl.DateTimeFormat('en-CA',{timeZone:'America/Costa_Rica',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()-86400000))?'Ayer · '+tgTime(x.hora):x.fecha.slice(8,10)+'/'+x.fecha.slice(5,7)+' · '+tgTime(x.hora);
   const latest=entries[0];
   $('tg-main-country').textContent=latest?.pais||'Pendiente';
   $('tg-main-number').textContent=latest?.numero||'—';
@@ -247,12 +254,12 @@ async function loadTG(){
   const miniEls=document.querySelectorAll('#tg-small-list .tg-mini');
   miniEls.forEach((el,i)=>{
     const x=others[i];
-    el.querySelector('.tg-mini-time').textContent=x?tgTime(x.hora):'Pendiente';
+    el.querySelector('.tg-mini-time').textContent=tgTimeWithDate(x);
     el.querySelector('.tg-mini-country').textContent=x?.pais||'—';
     el.querySelector('.tg-mini-result').innerHTML=x?`<img class="tg-mini-flag" src="${TG_FLAGS[x.pais]}" alt="Bandera de ${safe(x.pais)}"><span>${safe(x.numero)}</span>`:'—';
   });
-  $('tg-m-past').innerHTML=Array.from({length:3},(_,i)=>{const x=others[i];return `<div class="tg-mobile-mini"><span class="time">${x?tgTime(x.hora):'Pendiente'}</span><span class="country">${x?safe(x.pais):'—'}</span><span class="num">${x?`<img class="tg-mobile-flag" src="${TG_FLAGS[x.pais]}" alt="Bandera de ${safe(x.pais)}">`: ''}${x?safe(x.numero):'—'}</span></div>`}).join('');
-  const m=/^\d{4}-\d{2}-\d{2}$/.test(data.fecha||'')?data.fecha:null;
+  $('tg-m-past').innerHTML=Array.from({length:3},(_,i)=>{const x=others[i];return `<div class="tg-mobile-mini"><span class="time">${tgTimeWithDate(x)}</span><span class="country">${x?safe(x.pais):'—'}</span><span class="num">${x?`<img class="tg-mobile-flag" src="${TG_FLAGS[x.pais]}" alt="Bandera de ${safe(x.pais)}">`: ''}${x?safe(x.numero):'—'}</span></div>`}).join('');
+  const m=latest?.fecha||fallbackDate;
   const dateLabel=m?`${m.slice(8,10)}/${m.slice(5,7)}/${m.slice(0,4)}`:'fecha no indicada';
   const isToday=m===tgToday();
   status.textContent=isToday?'':`Resultados del ${dateLabel} · no son resultados de hoy`;
