@@ -288,6 +288,53 @@ def enrich_matches(matches):
             except Exception:pass
     return matches
 
+def recent_round_results(soup, teams, previous_round):
+    """Use verifiable, mirrored most-recent scorelines from the standings.
+
+    The public /calendario route only renders the selected upcoming round to
+    HTML. A match is accepted as a previous-round result only if BOTH clubs'
+    latest-record entries show the exact same home/away score, and both have
+    played at least that many league games. No date is invented.
+    """
+    if not previous_round or not 1 <= previous_round <= 18:
+        return []
+    by_code={t['code']:t for t in teams}
+    latest={}
+    for table in soup.find_all('table'):
+        header=' '.join(h.get_text(' ',strip=True) for h in table.find_all('th')).upper()
+        if not ('PJ' in header and ('PTS' in header or 'PTS.' in header)):
+            continue
+        for tr in table.find_all('tr'):
+            tds=tr.find_all('td',recursive=False)
+            if len(tds)<2:continue
+            club=identify(tds[1].get_text(' ',strip=True))
+            if club not in by_code or by_code[club]['pj'] < previous_round:
+                continue
+            li=tds[1].find('li')
+            # La fuente puede renderizar el historial como lista o texto.
+            # En ambos casos usar SOLO el primer marcador (el más reciente).
+            history_text=(li.get_text(' ',strip=True) if li else tds[1].get_text(' ',strip=True))
+            match=RESULT_REGEX.search(history_text.upper())
+            if not match:continue
+            home,hs,away,away_score=match.groups()
+            if club not in (home,away) or home not in by_code or away not in by_code:
+                continue
+            if by_code[home]['pj'] < previous_round or by_code[away]['pj'] < previous_round:
+                continue
+            latest[club]=(home,int(hs),away,int(away_score))
+        if latest:break
+    results=[]
+    seen=set()
+    for home,hs,away,away_score in latest.values():
+        record=(home,hs,away,away_score)
+        if record in seen or latest.get(home)!=record or latest.get(away)!=record:
+            continue
+        seen.add(record)
+        results.append(dict(home=home,away=away,hs=hs,as_=away_score,
+            status='finalizado',description='Resultado verificado en el historial reciente de ambos equipos',
+            url=SOURCE,kickoff=None,round=previous_round))
+    return results
+
 def parse_page(html):
     soup=BeautifulSoup(html,'html.parser')
     teams=parse_standings(soup)
@@ -314,6 +361,16 @@ def parse_page(html):
     dated=[m['round'] for m in matches if m.get('round')]
     display_round=min(upcoming) if upcoming else (max(dated) if dated else None)
     previous_round=display_round-1 if display_round and display_round>1 else None
+    # V7.6: el calendario público se inicia en la jornada siguiente. Para la
+    # anterior, complementar con los marcadores de los últimos encuentros de
+    # ambos clubes en la tabla (solo si coinciden exactamente).
+    if previous_round:
+        existing_games={(m['home'],m['away'],m.get('round')) for m in matches}
+        for historic in recent_round_results(soup,teams,previous_round):
+            key=(historic['home'],historic['away'],historic['round'])
+            if key not in existing_games:
+                matches.append(historic)
+                existing_games.add(key)
 
     # V7.3: conciliar partidos de la jornada con la tabla de la fuente.
     # La fuente puede publicar el marcador antes de incrementar PJ/PTS/GF/GC.
