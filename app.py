@@ -79,7 +79,7 @@ def seed():
         name,color=TEAMS[code]
         teams.append(dict(code=code,name=name,color=color,pj=pj,pts=pts,g=g,e=e,p=p,gf=gf,gc=gc,gd=gf-gc,form=list(form)[:5],logo=LOGO_FALLBACK.get(code)))
     return dict(teams=teams, matches=[], source=SOURCE, source_time='2026-10-24', fetched_at=None, live=False,
-                stale=True, status='Sin conexión: se muestra una referencia del 24/10/2026.', round=13, projected=False)
+                stale=True, status='Sin conexión: se muestra una referencia del 24/10/2026.', round=None, projected=False)
 
 def get_html(url=SOURCE):
     req=Request(url, headers={'User-Agent':'Mozilla/5.0 (compatible; UnafutPersonalDashboard/1.0)', 'Accept-Language':'es-CR,es;q=0.9'})
@@ -173,6 +173,58 @@ def parse_standings(soup):
             return teams
     raise ValueError('No se pudo validar la tabla con los diez equipos; se conserva la última versión válida.')
 
+def round_for_kickoff(kickoff):
+    """Jornada del Apertura 2026, según las fechas del calendario.
+    Ancla verificada: jornada 13 desde el 23/10 y jornada 14 desde el 30/10.
+    Si un encuentro está reprogramado, prevalece una jornada explícita de la fuente.
+    """
+    if not kickoff:return None
+    try:
+        dt=datetime.fromisoformat(kickoff).astimezone(TZ)
+        if dt.year!=2026:return None
+        n=13+(dt.date()-datetime(2026,10,23).date()).days//7
+        return n if 1<=n<=18 else None
+    except (TypeError, ValueError):return None
+
+def infer_fixture_round(m):
+    explicit=re.search(r'\bJornada\s*(\d{1,2})\b',m.get('description',''),re.I)
+    if explicit and 1<=int(explicit.group(1))<=18:return int(explicit.group(1))
+    return round_for_kickoff(m.get('kickoff'))
+
+def parse_calendar_matches(soup):
+    """Calendar links may say only 'Detalles del partido'; find parent match card."""
+    matches=[]
+    seen=set()
+    for link in soup.find_all('a',href=True):
+        href=link.get('href','')
+        if not re.search(r'/calendario/\d+',href):continue
+        url=urljoin(SOURCE,href)
+        if url in seen:continue
+        seen.add(url)
+        raw='';codes=[]
+        candidate=link
+        for _ in range(5):
+            candidate=candidate.parent
+            if candidate is None:break
+            candidate_text=candidate.get_text(' ',strip=True)
+            found=re.findall(r'(?<![A-Z])('+CODE_PATTERN+r')(?![A-Z])',candidate_text.upper())
+            ordered=[]
+            for c in found:
+                if c not in ordered:ordered.append(c)
+            if len(ordered)==2:
+                raw=candidate_text;codes=ordered;break
+        if len(codes)!=2:continue
+        status='desconocido'
+        if re.search(r'finalizado|final\b|\bft\b',raw,re.I):status='finalizado'
+        elif re.search(r'en vivo|medio tiempo|descanso',raw,re.I):status='en_vivo'
+        elif re.search(r'no iniciado|por jugar',raw,re.I):status='programado'
+        scored=re.search(r'(\d{1,2})\s*[–-]\s*(\d{1,2})',raw)
+        hs=int(scored.group(1)) if scored else None
+        away_score=int(scored.group(2)) if scored else None
+        matches.append(dict(home=codes[0],away=codes[1],hs=hs,as_=away_score,status=status,
+                            description=raw[:145],url=url,kickoff=None,round=None))
+    return matches[:25]
+
 def parse_matches(soup):
     # Enlaces a partidos del sitio, con equipos, marcadores y estado.
     # La forma del HTML puede cambiar: no inventar encuentros al no hallarlos.
@@ -201,7 +253,7 @@ def parse_matches(soup):
         if status=='programado' and scored:
             # Si no podemos confirmar el estado, no usarlo para proyecciones.
             status='desconocido'
-        matches.append(dict(home=home,away=away,hs=hs,as_=as_,status=status,description=raw[:145],url=urljoin(SOURCE,href),kickoff=None,round=13))
+        matches.append(dict(home=home,away=away,hs=hs,as_=as_,status=status,description=raw[:145],url=urljoin(SOURCE,href),kickoff=None,round=None))
     return matches[:35]
 
 MONTHS={'ene':1,'feb':2,'mar':3,'abr':4,'may':5,'jun':6,'jul':7,'ago':8,'sept':9,'sep':9,'oct':10,'nov':11,'dic':12}
@@ -218,6 +270,7 @@ def detail_match(m):
             hour=int(h)%12+(12 if mer.lower()=='p' else 0)
             dt=datetime(int(year),MONTHS[month.lower()],int(d),hour,int(mi),tzinfo=TZ)
             m['kickoff']=dt.isoformat(timespec='minutes')
+            m['round']=infer_fixture_round(m)
         # Estado definitivo solo con evidencia explícita del detalle.
         if re.search(r'\bFinalizado\b',text[:1300],re.I):m['status']='finalizado'
         elif re.search(r'\b(No iniciado|Antes del partido)\b',text[:1300],re.I) and m['status']=='desconocido':m['status']='programado'
@@ -239,19 +292,70 @@ def parse_page(html):
     soup=BeautifulSoup(html,'html.parser')
     teams=parse_standings(soup)
     matches=enrich_matches(parse_matches(soup))
+    # V7.5: la portada suele listar solo los encuentros próximos. Para la pestaña
+    # anterior consultamos además el calendario público, sin inventar resultados.
+    try:
+        calendar_soup=BeautifulSoup(get_html('https://futstatscr.com/calendario'),'html.parser')
+        history_candidates=parse_calendar_matches(calendar_soup)
+        history_candidates=enrich_matches(history_candidates[:15])
+        existing={(m['home'],m['away'],m.get('kickoff')) for m in matches}
+        for m in history_candidates:
+            key=(m['home'],m['away'],m.get('kickoff'))
+            if key not in existing and m.get('round') is not None:
+                matches.append(m);existing.add(key)
+    except Exception:
+        pass
+    # Si una ficha no identifica jornada, nunca atribuirle una inventada.
+    for m in matches:
+        if m.get('round') is None:m['round']=infer_fixture_round(m)
+    # Escoger como vista inicial la primera jornada con partidos aún por disputar.
+    upcoming=[m['round'] for m in matches if m.get('round') and m.get('status') not in ('finalizado',)
+             and (not m.get('kickoff') or datetime.fromisoformat(m['kickoff'])>datetime.now(TZ))]
+    dated=[m['round'] for m in matches if m.get('round')]
+    display_round=min(upcoming) if upcoming else (max(dated) if dated else None)
+    previous_round=display_round-1 if display_round and display_round>1 else None
 
-    # V7.1: la fuente publica la clasificación con sus estadísticas actualizadas,
-    # inclusive partidos en vivo cuando ya los refleja. NO sumar un encuentro
-    # otra vez: eso duplicaba PJ, puntos, goles y resultados de los dos clubes.
-    # El estado «en vivo» se obtiene de los partidos y se mantiene independiente
-    # de la clasificación; el cintillo de V7 sigue mostrando ambos componentes.
+    # V7.3: conciliar partidos de la jornada con la tabla de la fuente.
+    # La fuente puede publicar el marcador antes de incrementar PJ/PTS/GF/GC.
+    # Solo incorporar el resultado de un equipo si aún tiene MENOS PJ que
+    # la jornada a la que pertenece el encuentro. Esto evita sumar dos veces
+    # cuando la fuente ya incluye el partido (PJ >= jornada), y corrige la
+    # regresión de 13 a 12 PJ tras el marcador de la jornada 13.
+    # No alterar la tabla base: guardar por separado la proyección visible.
+    # Los marcadores de la jornada anterior pueden seguir sin reflejarse en PJ.
+    current_round=previous_round
+    provisional=copy.deepcopy(teams)
+    bycode={t['code']:t for t in provisional}
+    adjusted=[]
+    for m in matches:
+        if m.get('status') not in ('en_vivo','finalizado'):continue
+        if m.get('hs') is None or m.get('as_') is None:continue
+        if not current_round or int(m.get('round') or 0)!=current_round:continue
+        h=bycode.get(m.get('home'))
+        a=bycode.get(m.get('away'))
+        if not h or not a:continue
+        # Evitar aplicar más de una vez el encuentro de un mismo club.
+        # Solo considerar el primer partido válido de la jornada por club.
+        if h['code'] in adjusted or a['code'] in adjusted:continue
+        for t,goals,against in ((h,m['hs'],m['as_']),(a,m['as_'],m['hs'])):
+            if t['pj'] >= current_round:continue
+            t['pj']+=1
+            t['gf']+=goals
+            t['gc']+=against
+            t['gd']=t['gf']-t['gc']
+            if goals>against:t['g']+=1;t['pts']+=3
+            elif goals==against:t['e']+=1;t['pts']+=1
+            else:t['p']+=1
+        adjusted.extend((h['code'],a['code']))
+    projected=any(p['pj']!=t['pj'] for p,t in zip(provisional,teams))
     live=any(m.get('status')=='en_vivo' for m in matches)
     now=datetime.now(TZ).isoformat(timespec='seconds')
-    return dict(teams=teams, provisional=copy.deepcopy(teams), matches=matches,
-                live=live, projected=False, stale=False, round=13,
+    return dict(teams=teams, provisional=provisional, matches=matches,
+                live=live, projected=projected, stale=False, round=display_round,
+                previous_round=previous_round,
                 source=SOURCE,source_time=now,fetched_at=now,
-                status=('Clasificación de la fuente; partido(s) en vivo detectado(s).'
-                        if live else 'Clasificación basada en la tabla publicada por la fuente.'))
+                status=('Clasificación conciliada: marcador de jornada no incorporado aún por la fuente.'
+                        if projected else 'Clasificación publicada por la fuente.'))
 
 cache=seed()
 lock=threading.Lock()
