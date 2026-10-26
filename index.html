@@ -207,7 +207,13 @@ async function loadTG(){
   const r=await fetch('/api/tg-results',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);
   const data=await r.json();
   const allowed=Object.keys(TG_FLAGS);
-  const entries=(Array.isArray(data.sorteos)?data.sorteos:[]).map((x,i)=>({...x,i})).filter(x=>allowed.includes(x.pais)&&/^\d{2}:\d{2}$/.test(x.hora)&&/^\d{2}$/.test(String(x.numero))&&(+x.hora.slice(0,2))<24&&(+x.hora.slice(3))<60).sort((a,b)=>b.hora.localeCompare(a.hora)||a.i-b.i);
+  // V7.4: aceptar nombres habituales sin descartar sorteos publicados.
+  const aliases={'Nica':'Nicaragua','Salvador':'El Salvador','Panamá':'Panameña'};
+  // A igual hora, el último elemento escrito en el JSON es el más reciente.
+  const entries=(Array.isArray(data.sorteos)?data.sorteos:[])
+    .map((x,i)=>({...x,pais:aliases[x.pais]||x.pais,i}))
+    .filter(x=>allowed.includes(x.pais)&&/^\d{2}:\d{2}$/.test(x.hora)&&/^\d{2}$/.test(String(x.numero))&&(+x.hora.slice(0,2))<24&&(+x.hora.slice(3))<60)
+    .sort((a,b)=>b.hora.localeCompare(a.hora)||b.i-a.i);
   const latest=entries[0];
   $('tg-main-country').textContent=latest?.pais||'Pendiente';
   $('tg-main-number').textContent=latest?.numero||'—';
