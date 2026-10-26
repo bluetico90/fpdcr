@@ -2,28 +2,28 @@
   "fecha": "2026-10-26",
   "sorteos": [
     {
-      "pais": "Nicaragua",
-      "fecha": "2026-10-26",
-      "hora": "11:00",
-      "numero": "18"
-    },
-    {
-      "pais": "Honduras",
-      "fecha": "2026-10-26",
-      "hora": "11:00",
-      "numero": "50"
-    },
-    {
-      "pais": "El Salvador",
-      "fecha": "2026-10-26",
-      "hora": "11:00",
-      "numero": "35"
-    },
-    {
       "pais": "Tica",
       "fecha": "2026-10-26",
       "hora": "13:00",
       "numero": "24"
+    },
+    {
+      "pais": "Honduras",
+      "fecha": "2026-10-26",
+      "hora": "15:00",
+      "numero": "44"
+    },
+    {
+      "pais": "Nicaragua",
+      "fecha": "2026-10-26",
+      "hora": "15:00",
+      "numero": "75"
+    },
+    {
+      "pais": "Tica",
+      "fecha": "2026-10-26",
+      "hora": "16:30",
+      "numero": "22"
     }
   ]
 }
