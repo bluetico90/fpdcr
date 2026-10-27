@@ -2,12 +2,6 @@
   "fecha": "2026-10-26",
   "sorteos": [
     {
-      "pais": "Tica",
-      "fecha": "2026-10-26",
-      "hora": "13:00",
-      "numero": "24"
-    },
-    {
       "pais": "Honduras",
       "fecha": "2026-10-26",
       "hora": "15:00",
@@ -24,6 +18,12 @@
       "fecha": "2026-10-26",
       "hora": "16:30",
       "numero": "22"
+    },
+    {
+      "pais": "Tica",
+      "fecha": "2026-10-26",
+      "hora": "19:30",
+      "numero": "89"
     }
   ]
 }
