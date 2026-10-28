@@ -5,26 +5,26 @@
     {
       "pais": "Tica",
       "fecha": "2026-10-27",
-      "hora": "13:00",
-      "numero": "44"
+      "hora": "19:30",
+      "numero": "39"
+    },
+    {
+      "pais": "El Salvador",
+      "fecha": "2026-10-27",
+      "hora": "21:00",
+      "numero": "35"
+    },
+    {
+      "pais": "Honduras",
+      "fecha": "2026-10-27",
+      "hora": "21:00",
+      "numero": "67"
     },
     {
       "pais": "Nicaragua",
       "fecha": "2026-10-27",
-      "hora": "15:00",
-      "numero": "71"
-    },
-    {
-      "pais": "Tica",
-      "fecha": "2026-10-27",
-      "hora": "16:30",
-      "numero": "61"
-    },
-    {
-      "pais": "Tica",
-      "fecha": "2026-10-27",
-      "hora": "19:30",
-      "numero": "39"
+      "hora": "21:00",
+      "numero": "40"
     }
   ]
 }
