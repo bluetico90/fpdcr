@@ -3,18 +3,6 @@
   "fecha": "2026-10-29",
   "sorteos": [
     {
-      "pais": "El Salvador",
-      "fecha": "2026-10-29",
-      "hora": "11:00",
-      "numero": "46"
-    },
-    {
-      "pais": "Honduras",
-      "fecha": "2026-10-29",
-      "hora": "11:00",
-      "numero": "20"
-    },
-    {
       "pais": "Nicaragua",
       "fecha": "2026-10-29",
       "hora": "11:00",
@@ -25,6 +13,18 @@
       "fecha": "2026-10-29",
       "hora": "13:00",
       "numero": "11"
+    },
+    {
+      "pais": "Honduras",
+      "fecha": "2026-10-29",
+      "hora": "15:00",
+      "numero": "46"
+    },
+    {
+      "pais": "Nicaragua",
+      "fecha": "2026-10-29",
+      "hora": "15:00",
+      "numero": "59"
     }
   ]
 }
